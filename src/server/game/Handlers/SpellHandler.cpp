@@ -19,6 +19,7 @@
 #include "Archaeology.h"
 #include "Common.h"
 #include "Config.h"
+#include "Creature.h"
 #include "DatabaseEnv.h"
 #include "DBCStores.h"
 #include "GameClient.h"
@@ -38,7 +39,9 @@
 #include "SpellAuraEffects.h"
 #include "SpellMgr.h"
 #include "SpellPackets.h"
-#include "Totem.h"
+#include "TemporarySummon.h"
+#include "NewTempoarySummon.h"
+#include "TotemPackets.h"
 #include "TotemPackets.h"
 #include "World.h"
 #include "WorldPacket.h"
@@ -422,15 +425,15 @@ void WorldSession::HandleTotemDestroyed(WorldPackets::Totem::TotemDestroyed& pac
     if (_player->IsCharming())
         return;
 
-    if (packet.Slot +1 >= MAX_TOTEM_SLOT)
+    SummonPropertiesSlot slot = SummonPropertiesSlot(packet.Slot + 1);
+    if (slot < SummonPropertiesSlot::Totem1 || slot > SummonPropertiesSlot::Totem4)
         return;
 
-    if (!_player->m_SummonSlot[packet.Slot + 1])
+    NewTempoarySummon* totem = _player->GetSummonInSlot(slot);
+    if (!totem || totem->GetGUID() != packet.TotemGUID)
         return;
 
-    Creature* totem = ObjectAccessor::GetCreature(*GetPlayer(), _player->m_SummonSlot[packet.Slot + 1]);
-    if (totem && totem->IsTotem() && totem->GetGUID() == packet.TotemGUID)
-        totem->ToTotem()->UnSummon();
+    totem->Unsummon();
 }
 
 void WorldSession::HandleSelfResOpcode(WorldPacket& /*recvData*/)

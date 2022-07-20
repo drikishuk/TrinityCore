@@ -59,6 +59,7 @@
 #include "Opcodes.h"
 #include "OutdoorPvP.h"
 #include "PassiveAI.h"
+#include "NewPet.h"
 #include "Pet.h"
 #include "PetPackets.h"
 #include "PetAI.h"
@@ -76,6 +77,7 @@
 #include "SpellMgr.h"
 #include "SpellPackets.h"
 #include "TemporarySummon.h"
+#include "NewTempoarySummon.h"
 #include "Totem.h"
 #include "Transport.h"
 #include "UnitAI.h"
@@ -5530,6 +5532,7 @@ void Unit::ModifyAuraState(AuraStateType flag, bool apply)
                         CastSpell(this, itr->first, true);
                 }
             }
+            /*
             else if (Pet* pet = ToCreature()->ToPet())
             {
                 for (PetSpellMap::const_iterator itr = pet->m_spells.begin(); itr != pet->m_spells.end(); ++itr)
@@ -5543,6 +5546,7 @@ void Unit::ModifyAuraState(AuraStateType flag, bool apply)
                         CastSpell(this, itr->first, true);
                 }
             }
+            */
         }
     }
     else
@@ -5600,6 +5604,22 @@ bool Unit::HasAuraState(AuraStateType flag, SpellInfo const* spellProto, Unit co
     }
 
     return HasFlag(UNIT_FIELD_AURASTATE, 1 << (flag - 1));
+}
+
+void Unit::SetActivelyControlledSummon(NewPet* pet, bool apply)
+{
+    if (apply)
+    {
+        if (GetSummonGUID() == pet->GetGUID())
+            return;
+    }
+    else if (GetSummonGUID() != pet->GetGUID())
+        return;
+
+    SetSummonGUID(apply ? pet->GetGUID() : ObjectGuid::Empty);
+
+    if (IsPlayer())
+        ToPlayer()->SendPetSpellsMessage(pet);
 }
 
 void Unit::SetOwnerGUID(ObjectGuid owner)
@@ -8561,6 +8581,8 @@ void Unit::setDeathState(DeathState s)
         UnsummonAllTotems();
         RemoveAllControlled();
         RemoveAllAurasOnDeath();
+
+        UnsummonAllSummonsDueToDeath();
     }
 
     if (s == JUST_DIED)
@@ -9934,6 +9956,12 @@ void CharmInfo::BuildActionBar(WorldPacket* data)
 {
     for (uint32 i = 0; i < MAX_UNIT_ACTION_BAR_INDEX; ++i)
         *data << uint32(PetActionBar[i].packedData);
+}
+
+void CharmInfo::BuildActionBar(std::array<uint32, 10>& actionButtons)
+{
+    for (uint8 i = 0; i < MAX_UNIT_ACTION_BAR_INDEX; ++i)
+        actionButtons[i] = PetActionBar[i].packedData;
 }
 
 void CharmInfo::SetSpellAutocast(SpellInfo const* spellInfo, bool state)
@@ -14541,4 +14569,73 @@ void Unit::ProcessItemCast(PendingSpellCastRequest const& castRequest, SpellCast
 void Unit::SetGameClientMovingMe(GameClient* gameClientMovingMe)
 {
     _gameClientMovingMe = gameClientMovingMe;
+}
+
+void Unit::AddSummonGUIDToSlot(ObjectGuid summonGuid, SummonPropertiesSlot slot)
+{
+    _summonGUIDsInSlot[AsUnderlyingType(slot)] = summonGuid;
+    AddSummonGUID(summonGuid);
+}
+
+void Unit::AddSummonGUID(ObjectGuid summonGuid)
+{
+    _summonGUIDs.insert(summonGuid);
+}
+
+void Unit::RemoveSummonGUIDFromSlot(ObjectGuid summonGuid, SummonPropertiesSlot slot)
+{
+    if (_summonGUIDsInSlot[AsUnderlyingType(slot)] == summonGuid)
+        _summonGUIDsInSlot[AsUnderlyingType(slot)] = ObjectGuid::Empty;
+
+    RemoveSummonGUID(summonGuid);
+}
+
+void Unit::RemoveSummonGUID(ObjectGuid summonGuid)
+{
+    _summonGUIDs.erase(summonGuid);
+}
+
+bool Unit::HasSummonInSlot(SummonPropertiesSlot slot) const
+{
+    return _summonGUIDsInSlot[AsUnderlyingType(slot)] != ObjectGuid::Empty;
+}
+
+// This helper will unsummon all tempoary summons with SummonPropertiesFlag::DespawnOnSummonerDeath as well as summons in all slots
+void Unit::UnsummonAllSummonsDueToDeath()
+{
+    for (std::unordered_set<ObjectGuid>::const_iterator itr = _summonGUIDs.begin(); itr != _summonGUIDs.end(); ++itr)
+    {
+        if (NewTempoarySummon* summon = GetSummonByGUID(*itr))
+        {
+            if (summon->ShouldDespawnOnSummonerDeath())
+            {
+                itr = _summonGUIDs.erase(itr);
+                summon->Unsummon();
+            }
+        }
+    }
+}
+
+NewTempoarySummon* Unit::GetSummonInSlot(SummonPropertiesSlot slot) const
+{
+    if (_summonGUIDsInSlot[AsUnderlyingType(slot)].IsEmpty())
+        return nullptr;
+
+    Creature* summon = ObjectAccessor::GetCreature(*this, _summonGUIDsInSlot[AsUnderlyingType(slot)]);
+    if (!summon || !summon->IsSummon())
+        return nullptr;
+
+    return summon->ToTempoarySummon();
+}
+
+NewTempoarySummon* Unit::GetSummonByGUID(ObjectGuid guid) const
+{
+    if (_summonGUIDs.empty() || _summonGUIDs.find(guid) == _summonGUIDs.end())
+        return nullptr;
+
+    Creature* summon = ObjectAccessor::GetCreature(*this, guid);
+    if (!summon || !summon->IsSummon())
+        return nullptr;
+
+    return summon->ToTempoarySummon();
 }

@@ -80,3 +80,37 @@ WorldPacket const* WorldPackets::Pet::PetAdded::Write()
 
     return &_worldPacket;
 }
+
+WorldPacket const* WorldPackets::Pet::PetSpellsMessage::Write()
+{
+    _worldPacket << Spells.PetGUID;
+    _worldPacket << uint16(Spells.CreatureFamily);
+    _worldPacket << uint32(Spells.TimeLimit);
+    _worldPacket << uint32(Spells.PetModeAndOrders);
+
+    for (uint32 button : Spells.ActionButtons)
+        _worldPacket << uint32(button);
+
+    _worldPacket << uint8(Spells.Actions.size());
+    for (uint32 action : Spells.Actions)
+        _worldPacket << uint32(action);
+
+    _worldPacket << uint8(Spells.Cooldowns.size());
+    for (PetSpellCooldown const& cooldown : Spells.Cooldowns)
+    {
+        _worldPacket << uint32(cooldown.SpellID);
+        _worldPacket << uint16(cooldown.Category);
+        _worldPacket << int32(cooldown.Duration);
+        _worldPacket << int32(cooldown.CategoryDuration);
+    }
+
+    return &_worldPacket;
+}
+
+void WorldPackets::Pet::PetAction::Read()
+{
+    _worldPacket >> PetGUID;
+    _worldPacket >> Action;
+    _worldPacket >> TargetGUID;
+    _worldPacket >> ActionPosition;
+}

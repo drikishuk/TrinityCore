@@ -50,6 +50,7 @@
 #include "SpellAuraEffects.h"
 #include "SpellMgr.h"
 #include "TemporarySummon.h"
+#include "NewTempoarySummon.h"
 #include "Transport.h"
 #include "Util.h"
 #include "Vehicle.h"
@@ -443,6 +444,12 @@ void Creature::RemoveCorpse(bool setSpawnTime, bool destroyForNearbyPlayers)
             m_respawnTime = std::max<time_t>(GameTime::GetGameTime() + respawnDelay, m_respawnTime);
 
             SaveRespawnTime();
+        }
+
+        if (NewTempoarySummon* summon = ToTempoarySummon())
+        {
+            summon->Unsummon();
+            return;
         }
 
         if (TempSummon* summon = ToTempSummon())

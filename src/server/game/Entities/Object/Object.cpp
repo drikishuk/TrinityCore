@@ -48,6 +48,9 @@
 #include "SpellDefines.h"
 #include "SpellMgr.h"
 #include "TemporarySummon.h"
+#include "NewTempoarySummon.h"
+#include "NewGuardian.h"
+#include "NewPet.h"
 #include "Totem.h"
 #include "Transport.h"
 #include "Unit.h"
@@ -2116,6 +2119,103 @@ TempSummon* Map::SummonCreature(uint32 entry, Position const& pos, SummonCreatur
     }
 
     summon->InitSummon();
+
+    // call MoveInLineOfSight for nearby creatures
+    Trinity::AIRelocationNotifier notifier(*summon);
+    Cell::VisitAllObjects(summon, notifier, GetVisibilityRange());
+
+    return summon;
+}
+
+NewTempoarySummon* Map::SummonCreatureNew(uint32 entry, Position const& pos, SummonCreatureExtraArgs const& summonArgs /*= { }*/)
+{
+    NewTempoarySummon* summon = nullptr;
+    if (summonArgs.SummonProperties)
+    {
+        switch (SummonPropertiesControl(summonArgs.SummonProperties->Control))
+        {
+            case SummonPropertiesControl::None:
+                summon = new NewTempoarySummon(summonArgs.SummonProperties, summonArgs.Summoner, false);
+                break;
+            case SummonPropertiesControl::Guardian:
+                summon = new NewGuardian(summonArgs.SummonProperties, summonArgs.Summoner, false);
+                break;
+            case SummonPropertiesControl::Pet:
+                summon = new NewPet(summonArgs.SummonProperties, summonArgs.Summoner, false, false);
+                break;
+            default:
+                break;
+        }
+    }
+    else
+        summon = new NewTempoarySummon(summonArgs.SummonProperties, summonArgs.Summoner, false);
+
+    if (!summon)
+        return nullptr;
+
+    // Create creature entity
+    if (!summon->Create(GenerateLowGuid<HighGuid::Unit>(), this, entry, pos, nullptr, summonArgs.VehicleRecID, true))
+    {
+        delete summon;
+        return nullptr;
+    }
+
+    // Inherit summoner's Phaseshift
+    bool ignorePhaseShift = false;
+    if (summonArgs.SummonProperties && summonArgs.SummonProperties->GetFlags().HasFlag(SummonPropertiesFlags::IgnoreSummonerPhase)
+        && SummonPropertiesControl(summonArgs.SummonProperties->Control) == SummonPropertiesControl::None)
+        ignorePhaseShift = true;
+
+    if (!ignorePhaseShift && summonArgs.Summoner)
+        PhasingHandler::InheritPhaseShift(summon, summonArgs.Summoner);
+
+    TransportBase* transport = summonArgs.Summoner ? summonArgs.Summoner->GetTransport() : nullptr;
+    if (transport)
+    {
+        float x, y, z, o;
+        pos.GetPosition(x, y, z, o);
+        transport->CalculatePassengerOffset(x, y, z, &o);
+        summon->m_movementInfo.transport.pos.Relocate(x, y, z, o);
+
+        // This object must be added to transport before adding to map for the client to properly display it
+        transport->AddPassenger(summon);
+    }
+
+    // Initialize tempsummon fields
+    summon->SetUInt32Value(UNIT_CREATED_BY_SPELL, summonArgs.SummonSpellId);
+    summon->SetHomePosition(pos);
+    summon->SetPrivateObjectOwner(summonArgs.PrivateObjectOwner);
+    summon->SetSummonDuration(Milliseconds(summonArgs.SummonDuration));
+
+    if (summonArgs.SummonDuration > 0)
+    {
+        if (summon->ShouldDieUponExpiration())
+            summon->SetSummonType(TEMPSUMMON_DIE_UPON_EXPIRE);
+        else
+            summon->SetSummonType(TEMPSUMMON_TIMED_DESPAWN);
+    }
+
+    summon->HandlePreSummonActions(summonArgs.CreatureLevel);
+
+    // Handle health argument
+    if (summonArgs.SummonHealth > 0)
+    {
+        printf("using summon health.");
+        summon->SetMaxHealth(summonArgs.SummonHealth);
+        summon->SetHealth(summonArgs.SummonHealth);
+    }
+
+    if (!AddToMap(summon->ToCreature()))
+    {
+        // Returning false will cause the object to be deleted - remove from transport
+        if (transport)
+            transport->RemovePassenger(summon);
+
+        delete summon;
+        return nullptr;
+    }
+
+    summon->HandlePostSummonActions();
 
     // call MoveInLineOfSight for nearby creatures
     Trinity::AIRelocationNotifier notifier(*summon);

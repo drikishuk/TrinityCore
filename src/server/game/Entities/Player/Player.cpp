@@ -79,6 +79,7 @@
 #include "Opcodes.h"
 #include "OutdoorPvP.h"
 #include "OutdoorPvPMgr.h"
+#include "NewPet.h"
 #include "Pet.h"
 #include "PetPackets.h"
 #include "PetitionMgr.h"
@@ -373,6 +374,8 @@ Player::Player(WorldSession* session): Unit(true)
     _archaeology = new Archaeology(this);
     m_petScalingSynchTimer.Reset(1000);
     m_groupUpdateTimer.Reset(5000);
+
+    _canControlClassPets = false;
 }
 
 Player::~Player()
@@ -20537,6 +20540,27 @@ void Player::AddMItem(Item* it)
 bool Player::RemoveMItem(uint32 id)
 {
     return mMitems.erase(id) ? true : false;
+}
+
+void Player::SendPetSpellsMessage(NewPet* pet)
+{
+    // Warlocks and Hunters cannot control their pets until they have learned their respective control spell
+    if (pet->IsClassPet() && !CanControlClassPets())
+        return;
+
+    if (CharmInfo* charmInfo = pet->GetCharmInfo())
+    {
+        WorldPackets::Pet::PetSpellsMessage packet;
+        packet.Spells.PetGUID = pet->GetGUID();
+        packet.Spells.CreatureFamily = pet->GetCreatureTemplate()->family;
+        packet.Spells.PetModeAndOrders = 0;
+        packet.Spells.TimeLimit = pet->GetRemainingSummonDuration();
+        charmInfo->BuildActionBar(packet.Spells.ActionButtons);
+
+        SendDirectMessage(packet.Write());
+    }
+    else
+        TC_LOG_ERROR("Pet", "Attempted to send pet spells message for a pet without charmInfo.");
 }
 
 void Player::SendOnCancelExpectedVehicleRideAura() const

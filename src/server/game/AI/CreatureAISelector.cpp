@@ -81,8 +81,8 @@ namespace FactorySelector
     CreatureAI* SelectAI(Creature* creature)
     {
         // special pet case, if a tamed creature uses AIName (example SmartAI) we need to override it
-        if (creature->IsPet())
-            return ASSERT_NOTNULL(sCreatureAIRegistry->GetRegistryItem("PetAI"))->Create(creature);
+        //if (creature->IsPet())
+        //    return ASSERT_NOTNULL(sCreatureAIRegistry->GetRegistryItem("PetAI"))->Create(creature);
 
         // scriptname in db
         try

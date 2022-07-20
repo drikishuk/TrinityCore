@@ -82,10 +82,12 @@ class Item;
 class Minion;
 class MotionMaster;
 class Pet;
+class NewPet;
 class Spell;
 class SpellCastTargets;
 class SpellHistory;
 class SpellInfo;
+class NewTempoarySummon;
 class Totem;
 class Transport;
 class TransportBase;
@@ -95,6 +97,7 @@ class Vehicle;
 class VehicleJoinEvent;
 
 enum ZLiquidStatus : uint32;
+enum class SummonPropertiesSlot : int8;
 
 namespace Movement
 {
@@ -365,16 +368,19 @@ enum DamageEffectType : uint8
 enum UnitTypeMask
 {
     UNIT_MASK_NONE                  = 0x00000000,
-    UNIT_MASK_SUMMON                = 0x00000001,
-    UNIT_MASK_MINION                = 0x00000002,
-    UNIT_MASK_GUARDIAN              = 0x00000004,
-    UNIT_MASK_TOTEM                 = 0x00000008,
-    UNIT_MASK_PET                   = 0x00000010,
-    UNIT_MASK_VEHICLE               = 0x00000020,
-    UNIT_MASK_PUPPET                = 0x00000040,
-    UNIT_MASK_HUNTER_PET            = 0x00000080,
-    UNIT_MASK_CONTROLABLE_GUARDIAN  = 0x00000100,
-    UNIT_MASK_ACCESSORY             = 0x00000200
+    UNIT_MASK_SUMMON                = 0x00000001, // SummonPropertiesControl = 0
+    UNIT_MASK_GUARDIAN              = 0x00000002, // SummonPropertiesControl = 1
+    UNIT_MASK_PET                   = 0x00000004, // SummonPropertiesControl = 2 and class pets
+    UNIT_MASK_POSSESSED             = 0x00000008, // SummonPropertiesControl = 3
+    UNIT_MASK_POSSESSED_VEHICLE     = 0x00000010, // SummonPropertiesControl = 4
+    UNIT_MASK_VEHICLE               = 0x00000020, // SummonPropertiesControl = 5 and Wild entities
+
+    UNIT_MASK_MINION                = 0x00000040,
+    UNIT_MASK_TOTEM                 = 0x00000080,
+    UNIT_MASK_PUPPET                = 0x00000200,
+    UNIT_MASK_HUNTER_PET            = 0x00000400,
+    UNIT_MASK_CONTROLABLE_GUARDIAN  = 0x00000800,
+    UNIT_MASK_ACCESSORY             = 0x00001000
 };
 
 struct DiminishingReturn
@@ -695,6 +701,8 @@ struct TC_GAME_API CharmInfo
         bool RemoveSpellFromActionBar(uint32 spell_id);
         void LoadPetActionBar(const std::string& data);
         void BuildActionBar(WorldPacket* data);
+        void BuildActionBar(std::array<uint32, 10>& actionButtons);
+
         void SetSpellAutocast(SpellInfo const* spellInfo, bool state);
         void SetActionBar(uint8 index, uint32 spellOrAction, ActiveStates type)
         {
@@ -1227,16 +1235,26 @@ class TC_GAME_API Unit : public WorldObject
         DeathState getDeathState() const { return m_deathState; }
         virtual void setDeathState(DeathState s);           // overwrited in Creature/Player/Pet
 
+        ObjectGuid GetCreatorGUID() const { return GetGuidValue(UNIT_FIELD_CREATEDBY); }
+        void SetCreatorGUID(ObjectGuid guid) { SetGuidValue(UNIT_FIELD_CREATEDBY, guid); }
+
+        ObjectGuid GetSummonerGUID() const { return GetGuidValue(UNIT_FIELD_SUMMONEDBY); }
+        void SetSummonerGUID(ObjectGuid guid) { SetGuidValue(UNIT_FIELD_SUMMONEDBY, guid); }
+
+        void SetCritterGUID(ObjectGuid guid) { SetGuidValue(UNIT_FIELD_CRITTER, guid); }
+        ObjectGuid GetCritterGUID() const { return GetGuidValue(UNIT_FIELD_CRITTER); }
+
+        void SetSummonGUID(ObjectGuid guid) { SetGuidValue(UNIT_FIELD_SUMMON, guid); }
+        ObjectGuid GetSummonGUID() const { return GetGuidValue(UNIT_FIELD_SUMMON); }
+
+        void SetActivelyControlledSummon(NewPet* pet, bool apply);
+
         ObjectGuid GetOwnerGUID() const override { return GetGuidValue(UNIT_FIELD_SUMMONEDBY); }
         void SetOwnerGUID(ObjectGuid owner);
-        ObjectGuid GetCreatorGUID() const { return GetGuidValue(UNIT_FIELD_CREATEDBY); }
-        void SetCreatorGUID(ObjectGuid creator) { SetGuidValue(UNIT_FIELD_CREATEDBY, creator); }
         ObjectGuid GetMinionGUID() const { return GetGuidValue(UNIT_FIELD_SUMMON); }
         void SetMinionGUID(ObjectGuid guid) { SetGuidValue(UNIT_FIELD_SUMMON, guid); }
         void SetPetGUID(ObjectGuid guid) { m_SummonSlot[SUMMON_SLOT_PET] = guid; }
         ObjectGuid GetPetGUID() const { return m_SummonSlot[SUMMON_SLOT_PET]; }
-        void SetCritterGUID(ObjectGuid guid) { SetGuidValue(UNIT_FIELD_CRITTER, guid); }
-        ObjectGuid GetCritterGUID() const { return GetGuidValue(UNIT_FIELD_CRITTER); }
         ObjectGuid GetOwnerOrCreatorGUID() const { return GetOwnerGUID() ? GetOwnerGUID() : GetCreatorGUID(); }
 
         ObjectGuid GetCharmerGUID() const { return GetGuidValue(UNIT_FIELD_CHARMEDBY); }
@@ -1778,6 +1796,12 @@ class TC_GAME_API Unit : public WorldObject
         TempSummon* ToTempSummon() { if (IsSummon()) return reinterpret_cast<TempSummon*>(this); else return nullptr; }
         TempSummon const* ToTempSummon() const { if (IsSummon()) return reinterpret_cast<TempSummon const*>(this); else return nullptr; }
 
+        NewTempoarySummon* ToTempoarySummon() { if (IsSummon()) return reinterpret_cast<NewTempoarySummon*>(this); else return nullptr; }
+        NewTempoarySummon const* ToTempoarySummon() const { if (IsSummon()) return reinterpret_cast<NewTempoarySummon const*>(this); else return nullptr; }
+
+        NewPet* ToNewPet() { if (IsPet()) return reinterpret_cast<NewPet*>(this); else return nullptr; }
+        NewPet const* ToNewPet() const { if (IsPet()) return reinterpret_cast<NewPet const*>(this); else return nullptr; }
+
         ObjectGuid GetTarget() const { return GetGuidValue(UNIT_FIELD_TARGET); }
         virtual void SetTarget(ObjectGuid /*guid*/) = 0;
 
@@ -1972,6 +1996,24 @@ class TC_GAME_API Unit : public WorldObject
         std::unordered_map<MovementChangeType, PlayerMovementPendingChange> m_pendingMovementChanges;
 
         /* Player Movement fields END*/
+
+        /*Tempoary Summons*/
+        std::array<ObjectGuid, 7> _summonGUIDsInSlot;
+        std::unordered_set<ObjectGuid> _summonGUIDs;
+
+    public:
+        void AddSummonGUIDToSlot(ObjectGuid summonGuid, SummonPropertiesSlot slot);
+        void AddSummonGUID(ObjectGuid summonGuid);
+        void RemoveSummonGUIDFromSlot(ObjectGuid summonGuid, SummonPropertiesSlot slot);
+        void RemoveSummonGUID(ObjectGuid summonGuid);
+        bool HasSummonInSlot(SummonPropertiesSlot slot) const;
+        void UnsummonAllSummonsDueToDeath();
+        std::unordered_set<ObjectGuid> const& GetSummonGUIDs() const { return _summonGUIDs; }
+
+        NewTempoarySummon* GetSummonInSlot(SummonPropertiesSlot slot) const;
+        NewTempoarySummon* GetSummonByGUID(ObjectGuid guid) const;
+
+        /*End of Tempoary Summons*/
 };
 
 namespace Trinity

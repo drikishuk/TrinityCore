@@ -1552,9 +1552,16 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         void AddMItem(Item* it);
         bool RemoveMItem(uint32 id);
 
+        // Pets
+        void SendPetSpellsMessage(NewPet* pet);
+        void SetCanControlClassPets() { _canControlClassPets = true; }
+        bool CanControlClassPets() const { return _canControlClassPets; }
+
+    public:
         void SendOnCancelExpectedVehicleRideAura() const;
         bool CanControlPet(uint32 spellId = 0) const;
         void PetSpellInitialize();
+
         void CharmSpellInitialize();
         void PossessSpellInitialize();
         void VehicleSpellInitialize();
@@ -2760,6 +2767,8 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
 
         TimeTrackerSmall m_petScalingSynchTimer;
         TimeTrackerSmall m_groupUpdateTimer;
+
+        bool _canControlClassPets;
 };
 
 TC_GAME_API void AddItemsSetItem(Player* player, Item* item);

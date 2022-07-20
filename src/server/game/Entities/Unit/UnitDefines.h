@@ -354,7 +354,7 @@ struct DeclinedName
     std::string name[MAX_DECLINED_NAME_CASES];
 };
 
-enum ActiveStates
+enum ActiveStates : uint8
 {
     ACT_PASSIVE  = 0x01,                                    // 0x01 - passive
     ACT_DISABLED = 0x81,                                    // 0x80 - castable
@@ -380,5 +380,23 @@ enum CommandStates : uint8
     COMMAND_ABANDON = 3,
     COMMAND_MOVE_TO = 4
 };
+
+enum class PetModeFlags : uint16
+{
+    Unknown1        = 0x001,
+    Unknown2        = 0x002,
+    Unknown3        = 0x004,
+    Unknown4        = 0x008,
+    Unknown5        = 0x010,
+    Unknown6        = 0x020,
+    Unknown7        = 0x040,
+    Unknown8        = 0x080,
+    Unknown9        = 0x100,
+    Unknown10       = 0x200,
+    Unknown11       = 0x400,
+    DisableActions  = 0x800
+};
+
+DEFINE_ENUM_FLAG(PetModeFlags);
 
 #endif // UnitDefines_h__

@@ -64,6 +64,7 @@
 #include "SpellHistory.h"
 #include "SpellMgr.h"
 #include "TemporarySummon.h"
+#include "NewTempoarySummon.h"
 #include "Totem.h"
 #include "Transport.h"
 #include "Unit.h"
@@ -243,7 +244,7 @@ SpellEffectHandlerFn SpellEffectHandlers[TOTAL_SPELL_EFFECTS] =
     &Spell::EffectDamageFromMaxHealthPCT,                   //165 SPELL_EFFECT_DAMAGE_FROM_MAX_HEALTH_PCT
     &Spell::EffectGiveCurrency,                             //166 SPELL_EFFECT_GIVE_CURRENCY
     &Spell::EffectUpdatePlayerPhase,                        //167 SPELL_EFFECT_UPDATE_PLAYER_PHASE
-    &Spell::EffectNULL,                                     //168 SPELL_EFFECT_168
+    &Spell::EffectNULL,                                     //168 SPELL_EFFECT_ALLOW_CONTROL_PET
     &Spell::EffectNULL,                                     //169 SPELL_EFFECT_DESTROY_ITEM
     &Spell::EffectUpdateZoneAurasAndPhases,                 //170 SPELL_EFFECT_UPDATE_ZONE_AURAS_AND_PHASES
     &Spell::EffectSummonPersonalGameObject,                 //171 SPELL_EFFECT_SUMMON_PERSONAL_GAMEOBJECT
@@ -1922,13 +1923,13 @@ void Spell::EffectSummonType(SpellEffIndex effIndex)
 
     ObjectGuid privateObjectOwner = [&]()
     {
-        if (!(properties->Flags & (SUMMON_PROP_FLAG_PERSONAL_SPAWN | SUMMON_PROP_FLAG_PERSONAL_GROUP_SPAWN)))
+        if (!(properties->GetFlags().HasFlag(SummonPropertiesFlags::OnlyVisibleToSummoner | SummonPropertiesFlags::OnlyVisibleToSummonerGroup)))
             return ObjectGuid::Empty;
 
         if (caster->IsPrivateObject())
             return caster->GetPrivateObjectOwner();
 
-        if (properties->Flags & SUMMON_PROP_FLAG_PERSONAL_GROUP_SPAWN)
+        if (properties->GetFlags().HasFlag(SummonPropertiesFlags::OnlyVisibleToSummonerGroup))
             if (caster->IsPlayer() && caster->ToPlayer()->GetGroup())
                 return caster->ToPlayer()->GetGroup()->GetGUID();
 
@@ -1999,7 +2000,7 @@ void Spell::EffectSummonType(SpellEffIndex effIndex)
             dest = caster->GetRandomPoint(*destTarget, radius);
         }
 
-        if (TempSummon* summon = caster->GetMap()->SummonCreature(entry, *destTarget, extraArgs))
+        if (NewTempoarySummon* summon = caster->GetMap()->SummonCreatureNew(entry, *destTarget, extraArgs))
         {
             ExecuteLogEffectSummonObject(effIndex, summon);
 
@@ -4753,40 +4754,27 @@ void Spell::EffectResurrectPet(SpellEffIndex /*effIndex*/)
     pet->SavePetToDB(PET_SAVE_CURRENT_STATE);
 }
 
+static constexpr uint32 SPELL_TOTEMIC_RECALL_ENERGIZE = 39104;
 void Spell::EffectDestroyAllTotems(SpellEffIndex /*effIndex*/)
 {
-    if (effectHandleMode != SPELL_EFFECT_HANDLE_HIT)
+    if (effectHandleMode != SPELL_EFFECT_HANDLE_HIT || !m_caster->IsUnit())
         return;
 
-    if (!unitCaster)
-        return;
-
-    int32 mana = 0;
-    for (uint8 slot = SUMMON_SLOT_TOTEM_FIRE; slot < MAX_TOTEM_SLOT; ++slot)
+    int32 refundedMana = 0;
+    for (uint8 i = AsUnderlyingType(SummonPropertiesSlot::Totem1); i <= AsUnderlyingType(SummonPropertiesSlot::Totem4); ++i)
     {
-        if (!unitCaster->m_SummonSlot[slot])
+        NewTempoarySummon* summon = m_caster->ToUnit()->GetSummonInSlot(SummonPropertiesSlot(i));
+        if (!summon)
             continue;
 
-        Creature* totem = m_caster->GetMap()->GetCreature(unitCaster->m_SummonSlot[slot]);
-        if (totem && totem->IsTotem())
-        {
-            uint32 spell_id = totem->GetUInt32Value(UNIT_CREATED_BY_SPELL);
-            SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spell_id);
-            if (spellInfo)
-            {
-                mana += spellInfo->ManaCost;
-                mana += int32(CalculatePct(unitCaster->GetCreateMana(), spellInfo->ManaCostPercentage));
-            }
-            totem->ToTotem()->UnSummon();
-        }
+        if (SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(summon->GetUInt32Value(UNIT_CREATED_BY_SPELL)))
+            refundedMana += CalculatePct(spellInfo->CalcPowerCost(m_caster, m_spellInfo->GetSchoolMask()), damage);
+
+        summon->Unsummon();
     }
-    ApplyPct(mana, damage);
-    if (mana)
-    {
-        CastSpellExtraArgs args(TRIGGERED_FULL_MASK);
-        args.AddSpellMod(SPELLVALUE_BASE_POINT0, mana);
-        unitCaster->CastSpell(unitCaster, 39104, args);
-    }
+
+    if (refundedMana > 0)
+        m_caster->CastSpell(m_caster, SPELL_TOTEMIC_RECALL_ENERGIZE, CastSpellExtraArgs(TRIGGERED_FULL_MASK).AddSpellBP0(refundedMana));
 }
 
 void Spell::EffectDurabilityDamage(SpellEffIndex effIndex)
@@ -5781,6 +5769,17 @@ void Spell::EffectUpdatePlayerPhase(SpellEffIndex /*effIndex*/)
         return;
 
     PhasingHandler::OnConditionChange(unitTarget);
+}
+
+void Spell::EffectAllowControlPet(SpellEffIndex /*effIndex*/)
+{
+    if (effectHandleMode != SPELL_EFFECT_HANDLE_HIT_TARGET)
+        return;
+
+    if (!unitTarget || !unitTarget->IsPlayer())
+        return;
+
+    unitTarget->ToPlayer()->SetCanControlClassPets();
 }
 
 void Spell::EffectUpdateZoneAurasAndPhases(SpellEffIndex /*effIndex*/)

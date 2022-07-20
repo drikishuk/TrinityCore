@@ -26,6 +26,7 @@
 #include "ObjectMgr.h"
 #include "Opcodes.h"
 #include "Pet.h"
+#include "NewPet.h"
 #include "PetPackets.h"
 #include "PetAI.h"
 #include "Player.h"
@@ -59,64 +60,41 @@ void WorldSession::HandleDismissCritter(WorldPacket& recvData)
     }
 }
 
-void WorldSession::HandlePetAction(WorldPacket& recvData)
+void WorldSession::HandlePetAction(WorldPackets::Pet::PetAction& packet)
 {
-    ObjectGuid guid1;
-    uint32 data;
-    ObjectGuid guid2;
-    float x, y, z;
-    recvData >> guid1;                                     //pet guid
-    recvData >> data;
-    recvData >> guid2;                                     //tag guid
-    // Position
-    recvData >> x;
-    recvData >> y;
-    recvData >> z;
-
-    uint32 spellid = UNIT_ACTION_BUTTON_ACTION(data);
-    uint8 flag = UNIT_ACTION_BUTTON_TYPE(data);             //delete = 0x07 CastSpell = C1
-
-    // used also for charmed creature
-    Unit* pet = ObjectAccessor::GetUnit(*_player, guid1);
-    TC_LOG_DEBUG("entities.pet", "HandlePetAction: %s - flag: %u, spellid: %u, target: %s.", guid1.ToString().c_str(), uint32(flag), spellid, guid2.ToString().c_str());
-
-    if (!pet)
-    {
-        TC_LOG_DEBUG("entities.pet", "HandlePetAction: %s doesn't exist for %s %s", guid1.ToString().c_str(), GetPlayer()->GetGUID().ToString().c_str(), GetPlayer()->GetName().c_str());
-        return;
-    }
-
-    if (pet != GetPlayer()->GetFirstControlled())
-    {
-        TC_LOG_DEBUG("entities.pet", "HandlePetAction: %s does not belong to %s %s", guid1.ToString().c_str(), GetPlayer()->GetGUID().ToString().c_str(), GetPlayer()->GetName().c_str());
-        return;
-    }
-
-    if (!pet->IsAlive())
-    {
-        SpellInfo const* spell = (flag == ACT_ENABLED || flag == ACT_PASSIVE) ? sSpellMgr->GetSpellInfo(spellid) : nullptr;
-        if (!spell)
-            return;
-        if (!spell->HasAttribute(SPELL_ATTR0_ALLOW_CAST_WHILE_DEAD))
-            return;
-    }
-
-    /// @todo allow control charmed player?
-    if (pet->GetTypeId() == TYPEID_PLAYER && !(flag == ACT_COMMAND && spellid == COMMAND_ATTACK))
+    if (packet.PetGUID.IsEmpty() || packet.Action == 0)
         return;
 
-    if (GetPlayer()->m_Controlled.size() == 1)
-        HandlePetActionHelper(pet, guid1, spellid, flag, guid2, x, y, z);
+    uint32 actionValue = packet.Action & 0xFFFFFF;
+    uint8 actionFlags = (packet.Action >> 24) & 0xFF;
+
+    // Class pets are single entities while regular summons (Treants, Feral Spirits etc) are multi-summons which are all being controlled at once
+    std::vector<NewPet*> controlledPets;
+    if (packet.PetGUID.IsPet())
+    {
+    }
     else
     {
-        //If a pet is dismissed, m_Controlled will change
-        std::vector<Unit*> controlled;
-        for (Unit::ControlList::iterator itr = GetPlayer()->m_Controlled.begin(); itr != GetPlayer()->m_Controlled.end(); ++itr)
-            if ((*itr)->GetEntry() == pet->GetEntry() && (*itr)->IsAlive())
-                controlled.push_back(*itr);
-        for (std::vector<Unit*>::iterator itr = controlled.begin(); itr != controlled.end(); ++itr)
-            HandlePetActionHelper(*itr, guid1, spellid, flag, guid2, x, y, z);
+        Creature* summon = ObjectAccessor::GetCreature(*_player, packet.PetGUID);
+        if (!summon || !summon->IsPet())
+            return;
+
+        controlledPets.push_back(summon->ToNewPet());
+
+        for (ObjectGuid guid : _player->GetSummonGUIDs())
+        {
+            if (guid == packet.PetGUID)
+                continue;
+
+            if (Creature* storedSummon = ObjectAccessor::GetCreature(*_player, guid))
+                if (storedSummon->GetEntry() == summon->GetEntry() && summon->IsPet())
+                    controlledPets.push_back(storedSummon->ToNewPet());
+
+        }
     }
+
+    for (NewPet* pet : controlledPets)
+        HandlePetActionHelper(pet, packet.TargetGUID, actionValue, actionFlags, packet.ActionPosition.Pos);
 }
 
 void WorldSession::HandlePetStopAttack(WorldPacket &recvData)
@@ -147,22 +125,18 @@ void WorldSession::HandlePetStopAttack(WorldPacket &recvData)
     pet->AttackStop();
 }
 
-void WorldSession::HandlePetActionHelper(Unit* pet, ObjectGuid guid1, uint32 spellid, uint16 flag, ObjectGuid guid2, float x, float y, float z)
+void HandlePetActionHelper(NewPet* pet, ObjectGuid targetGuid, uint32 actionValue, uint16 actionFlag, Position const& actionPosition)
 {
     CharmInfo* charmInfo = pet->GetCharmInfo();
     if (!charmInfo)
-    {
-        TC_LOG_DEBUG("entities.pet", "WorldSession::HandlePetAction(petGuid: %s, tagGuid: %s, spellId: %u, flag: %u): object (GUID: %u Entry: %u TypeId: %u) is considered pet-like but doesn't have a charminfo!",
-            guid1.ToString().c_str(), guid2.ToString().c_str(), spellid, flag, pet->GetGUID().GetCounter(), pet->GetEntry(), pet->GetTypeId());
         return;
-    }
 
-    switch (flag)
+    switch (actionFlag)
     {
-        case ACT_COMMAND:                                   //0x07
-            switch (spellid)
+        case ACT_COMMAND: //0x07
+            switch (actionValue)
             {
-                case COMMAND_STAY:                          //flat=1792  //STAY
+                case COMMAND_STAY: //flat=1792  //STAY
                     if (pet->GetMotionMaster()->GetCurrentSlot() != MOTION_SLOT_CONTROLLED)
                         pet->StopMoving();
 
@@ -181,7 +155,7 @@ void WorldSession::HandlePetActionHelper(Unit* pet, ObjectGuid guid1, uint32 spe
                 case COMMAND_FOLLOW:                        //spellid=1792  //FOLLOW
                     pet->AttackStop();
                     pet->InterruptNonMeleeSpells(false);
-                    pet->FollowTarget(_player);
+                    pet->FollowTarget(pet->GetSummoner());
                     charmInfo->SetCommandState(COMMAND_FOLLOW);
 
                     charmInfo->SetIsCommandAttack(false);
@@ -190,7 +164,7 @@ void WorldSession::HandlePetActionHelper(Unit* pet, ObjectGuid guid1, uint32 spe
                     charmInfo->SetIsCommandFollow(true);
                     charmInfo->SetIsFollowing(false);
                     break;
-                case COMMAND_ATTACK:                        //spellid=1792  //ATTACK
+                case COMMAND_ATTACK:  //spellid=1792  //ATTACK
                 {
                     // Can't attack if owner is pacified
                     if (_player->HasAuraType(SPELL_AURA_MOD_PACIFY))

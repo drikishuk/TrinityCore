@@ -94,6 +94,49 @@ namespace WorldPackets
             uint32 PetNumber = 0;
             uint8 Flags = 0;
         };
+
+        struct PetSpellCooldown
+        {
+            int32 SpellID = 0;
+            int32 Duration = 0;
+            int32 CategoryDuration = 0;
+            uint16 Category = 0;
+        };
+
+        struct PetSpells
+        {
+            ObjectGuid PetGUID;
+            uint16 CreatureFamily = 0;
+            uint16 Specialization = 0;
+            uint32 TimeLimit = 0;
+            uint32 PetModeAndOrders = 0;
+            std::vector<uint32> Actions;
+            std::vector<PetSpellCooldown> Cooldowns;
+            std::array<uint32, 10> ActionButtons = { };
+        };
+
+        class PetSpellsMessage final : public ServerPacket
+        {
+        public:
+            PetSpellsMessage() : ServerPacket(SMSG_PET_SPELLS) { }
+
+            WorldPacket const* Write() override;
+
+            PetSpells Spells;
+        };
+
+        class PetAction final : public ClientPacket
+        {
+        public:
+            PetAction(WorldPacket&& packet) : ClientPacket(CMSG_PET_ACTION, std::move(packet)) { }
+
+            void Read() override;
+
+            ObjectGuid PetGUID;
+            ObjectGuid TargetGUID;
+            TaggedPosition<Position::XYZ> ActionPosition;
+            uint32 Action = 0;
+        };
     }
 }
 

@@ -349,14 +349,14 @@ namespace BSN {
         };
     }
 
-    template <std::size_t Length, std::size_t Bits, std::size_t BaseLength>
+    template <std::size_t Length, std::size_t Bits, std::size_t BaseLength = 0>
     struct AsciiString {
         // ASCII String.
         std::size_t _size;
         char _storage[Length];
     };
 
-    template <std::size_t Length, std::size_t Bits>
+    template <std::size_t Length, std::size_t Bits, std::size_t BaseLength = 0 /* in bytes */>
     struct String {
         // UTF8 String
         std::size_t _size; // Not sure if in characters or bytes; probably characters? Need more decomp

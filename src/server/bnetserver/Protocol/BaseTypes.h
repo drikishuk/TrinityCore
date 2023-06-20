@@ -117,12 +117,11 @@ namespace BSN {
     // to std::monostate, where the contents of the union are unspecified, and every accessor asserts that a value is actually stored in the union.
     namespace Choice {
         namespace dtl {
-            using std::construct_at;
-            // TODO: Pre-cpp20 destroy_at considers a program illformed (no diagnostic required, sic) if T is an array type.
             using std::destroy_at;
+            using std::construct_at;
 
             template <auto E, std::size_t I, typename T>
-            struct indexed_leaf { // Must be an empty type for EBO
+            struct indexed_leaf {
                 static_assert(std::is_default_constructible_v<T>, "Type must be default constructible");
 
                 using enum_type = decltype(E);
@@ -131,14 +130,14 @@ namespace BSN {
                 static T& launder(std::byte* storage) { return *std::launder(reinterpret_cast<T*>(storage)); }
                 static const T& launder(const std::byte* storage) { return *std::launder(reinterpret_cast<const T*>(storage)); }
 
-                static void call(std::byte* storage, void* closure) {
-                    auto pfn = reinterpret_cast<std::function<void(T&)>*>(closure);
-                    return (*pfn)(launder(storage));
+                template <typename V>
+                static auto call(std::byte* storage, V&& v) {
+                    return v(launder(storage));
                 }
 
-                static void call(std::byte const* storage, void* closure) {
-                    auto pfn = reinterpret_cast<std::function<void(T const&)>*>(closure);
-                    return (*pfn)(launder(storage));
+                template <typename V>
+                static auto call(std::byte const* storage, V&& v) {
+                    return v(launder(storage));
                 }
 
                 constexpr static const auto enum_value = E;
@@ -149,7 +148,7 @@ namespace BSN {
 
             template <auto... Es, std::size_t... Is, typename... Ts>
             struct indexed_leaf_pack<std::integer_sequence<std::common_type_t<decltype(Es)...>, Es...>, std::index_sequence<Is...>, Ts...>
-                // +1 so that 0 is automatically monostate; private inheritance to abuse slicing for overload resolution
+                // +1 so that 0 is automatically monostate
                 : private indexed_leaf<Es, Is + 1, Ts>...
             {
                 explicit indexed_leaf_pack() noexcept = default;
@@ -158,17 +157,23 @@ namespace BSN {
                 using enum_type = std::common_type_t<decltype(Es)...>;
 
             private:
+                constexpr static auto select_base_for_index(...) = delete;
                 template <std::size_t I, auto E, typename T> constexpr static auto select_base_for_index(indexed_leaf<E, I, T>* pack) { return pack; }
                 template <std::size_t I>
-                using base_for_index_t = std::remove_pointer_t<decltype(select_base_for_index<I + 1>(std::declval<indexed_leaf_pack*>()))>;
+                using base_for_index_t = std::remove_pointer_t<decltype(select_base_for_index<I>(std::declval<indexed_leaf_pack*>()))>;
 
                 constexpr static auto select_base_for_enum(...) = delete;
                 template <auto E, std::size_t I, typename T> constexpr static auto select_base_for_enum(indexed_leaf<E, I, T>* pack) { return pack; }
                 template <auto E> using base_for_enum_t = std::remove_pointer_t<decltype(select_base_for_enum<E>(std::declval<indexed_leaf_pack*>()))>;
 
                 constexpr static auto select_base_for_type(...) = delete;
-                template <auto E, std::size_t I, typename T> constexpr static auto select_base_for_type(indexed_leaf<E, I, T>* pack) { return pack; }
+                template <typename T, auto E, std::size_t I> constexpr static auto select_base_for_type(indexed_leaf<E, I, T>* pack) { return pack; }
                 template <typename T> using base_for_type_t = std::remove_pointer_t<decltype(select_base_for_type<T>(std::declval<indexed_leaf_pack*>()))>;
+
+                template <typename V>
+                constexpr static const std::size_t index_for_visitor = base_for_type_t<
+                    std::decay_t<std::tuple_element_t<0, boost::callable_traits::args_t<V>>>
+                >::index;
 
             public:
                 /**
@@ -179,7 +184,7 @@ namespace BSN {
                 template <auto E>
                 auto get() const -> typename base_for_enum_t<E>::value_type const& {
                     using base_for_enum = base_for_enum_t<E>;
-                    ASSERT(base_for_enum::index == _index && "runtime type does not match for this BSN::Choice");
+                    assert(base_for_enum::index == _index && "runtime type does not match for this BSN::Choice");
 
                     return *as_pointer<typename base_for_enum::value_type>(_storage);
                 }
@@ -187,12 +192,12 @@ namespace BSN {
                 /**
                  * Returns a mutable reference to the value held for a given enumeration value.
                  *
-                 * If the object currently held does not match the expected type, this function asserts.                
+                 * If the object currently held does not match the expected type, this function asserts.
                  */
                 template <auto E>
                 auto get() -> typename base_for_enum_t<E>::value_type& {
                     using base_for_enum = base_for_enum_t<E>;
-                    ASSERT(base_for_enum::index == _index);
+                    assert(base_for_enum::index == _index);
 
                     return *as_pointer<typename base_for_enum::value_type>(_storage);
                 }
@@ -204,8 +209,8 @@ namespace BSN {
                  */
                 template <auto E, typename... Us, typename = std::enable_if_t<
                     std::is_constructible_v<typename base_for_enum_t<E>::value_type, Us...>
-                >>
-                void emplace(Us&&... args) {
+                    >>
+                    void emplace(Us&&... args) {
                     // Destruct the previous value if it exists
                     clear();
 
@@ -217,7 +222,7 @@ namespace BSN {
 
                 /**
                  * Default-constructs the alternative value associated with the given tag into this union.
-                 * 
+                 *
                  * @param[in] tag The tag identifying the type to start holding.
                  */
                 void set(enum_type tag) {
@@ -260,7 +265,7 @@ namespace BSN {
                  * If no value is held, this function asserts.
                  */
                 auto index() const noexcept -> enum_type {
-                    ASSERT(has_value() && "Empty BSN::Choice");
+                    assert(has_value() && "Empty BSN::Choice");
 
                     constexpr static const enum_type values[] = { Es... };
                     return values[_index - 1];
@@ -272,37 +277,37 @@ namespace BSN {
                  * @param[in] ...visitors A variadic pack of visitors, one for each of the possibly stored type, in the order they are declared
                  *                        on this type.
                  */
-                void visit(std::function<void(Ts&)>... visitors) {
-                    // TODO: Is there any way to drop std::function in favor of more lightweight function_ref-like types somehow?
+                template <typename... Visitors>
+                void visit(Visitors&&... visitors) const {
+                    assert(has_value() && "empty BSN::Choice");
 
-                    ASSERT(has_value() && "empty BSN::Choice");
-
-                    void* vs[] = { std::addressof(visitors)... };
-                    using dispatch_type = void(*)(std::byte*, void*);
-                    dispatch_type dispatches[] = { static_cast<dispatch_type>(&indexed_leaf<Es, Is + 1, Ts>::call)... };
-
-                    dispatches[_index - 1](_storage, vs[_index - 1]);
+                    visit_impl(std::index_sequence<index_for_visitor<Visitors>...> { },
+                        std::forward<Visitors>(visitors)...
+                    );
                 }
 
-                /**
-                 * Implements the visitor pattern on this type.
-                 *
-                 * @param[in] ...visitors A variadic pack of visitors, one for each of the possibly stored type, in the order they are declared
-                 *                        on this type.
-                 */
-                void visit(std::function<void(const Ts&)>... visitors) const {
-                    // TODO: Is there any way to drop std::function in favor of more lightweight function_ref-like types somehow?
-
-                    ASSERT(has_value() && "empty BSN::Choice");
-
-                    void* vs[] = { std::addressof(visitors)... };
-                    using dispatch_type = void(*)(std::byte const*, void*);
-                    dispatch_type dispatches[] = { static_cast<dispatch_type>(&indexed_leaf<Es, Is + 1, Ts>::call)... };
-
-                    dispatches[_index - 1](_storage, vs[_index - 1]);
-                }
-                
             private:
+
+                template <std::size_t U, typename F>
+                struct zipped {
+                    zipped(F&& f) : f(std::move(f)) { }
+
+                    F f;
+                };
+
+                template <std::size_t... Us, typename... Visitors>
+                void visit_impl(std::index_sequence<Us...>, Visitors&&... visitors) const {
+                    return visit_impl_zip(zipped<Us, Visitors>(std::forward<Visitors>(visitors))...);
+                }
+
+                template <std::size_t U, typename F, typename... Zs>
+                [[msvc::forceinline]] void visit_impl_zip(zipped<U, F> z, Zs&&... r) const {
+                    if (U == _index)
+                        base_for_index_t<U>::call(_storage, z.f);
+                    else if constexpr (sizeof...(Zs) > 0)
+                        visit_impl_zip(std::forward<Zs>(r)...);
+                }
+
                 // Utility that launders the storage to a pointer.
                 template <typename U>
                 U* as_pointer() noexcept {
@@ -319,7 +324,7 @@ namespace BSN {
         }
 
         template <auto E, typename T>
-        struct Of final{
+        struct Of final {
             constexpr static const auto enum_value = E;
             using enum_type = decltype(E);
 
@@ -330,7 +335,7 @@ namespace BSN {
         class Choice final : private dtl::make_indexed_leaf_pack<
             std::integer_sequence<Enum, Ts::enum_value...>,
             typename Ts::value_type...
-        >::type  {
+        >::type {
             using base_t = typename dtl::make_indexed_leaf_pack<
                 std::integer_sequence<Enum, Ts::enum_value...>,
                 typename Ts::value_type...
@@ -339,7 +344,7 @@ namespace BSN {
             static_assert((std::is_same_v<Enum, typename Ts::enum_type> && ...));
 
         public:
-            
+
             using base_t::index;
             using base_t::get;
             using base_t::set;

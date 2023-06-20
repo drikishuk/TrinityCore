@@ -349,7 +349,7 @@ namespace BSN {
         };
     }
 
-    template <std::size_t Length, std::size_t Bits>
+    template <std::size_t Length, std::size_t Bits, std::size_t BaseLength>
     struct AsciiString {
         // ASCII String.
         std::size_t _size;

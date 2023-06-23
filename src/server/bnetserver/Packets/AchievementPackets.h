@@ -26,14 +26,14 @@ namespace Battlenet
     {
         enum Opcode
         {
-            CMSG_LISTEN_REQUEST             = 0x0,  // Not implemented
-            CMSG_CRITERIA_FLUSH_REQUEST     = 0x3,  // Not implemented
-            CMSG_CHANGE_TROPHY_CASE_REQUEST = 0x5,  // Not implemented
+            CMSG_LISTEN_REQUEST             = 0x0,  // 'Lstn' Not implemented
+            CMSG_CRITERIA_FLUSH_REQUEST     = 0x3,  // 'CrFl' Not implemented
+            CMSG_CHANGE_TROPHY_CASE_REQUEST = 0x5,  // 'Rph' Not implemented
 
-            SMSG_DATA                       = 0x2,  // Not implemented
-            SMSG_CRITERIA_FLUSH_RESPONSE    = 0x3,  // Not implemented
-            SMSG_ACHIEVEMENT_HANDLE_UPDATE  = 0x4,  // Not implemented
-            SMSG_CHANGE_TROPHY_CASE_RESULT  = 0x6   // Not implemented
+            SMSG_DATA                       = 0x2,  // 'Data' Not implemented
+            SMSG_CRITERIA_FLUSH_RESPONSE    = 0x3,  // 'CrFl' Not implemented
+            SMSG_ACHIEVEMENT_HANDLE_UPDATE  = 0x4,  // 'Updt' Not implemented
+            SMSG_CHANGE_TROPHY_CASE_RESULT  = 0x6   // 'TrpR' Not implemented
         };
     }
 }

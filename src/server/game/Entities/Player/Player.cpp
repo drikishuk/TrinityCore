@@ -24652,11 +24652,11 @@ void Player::InitGlyphsForLevel()
     uint8 level = getLevel();
     uint32 slotMask = 0;
 
-    if (level >= 25)
+    if (level >= 20)
         slotMask |= 0x01 | 0x02 | 0x40;
-    if (level >= 50)
+    if (level >= 40)
         slotMask |= 0x04 | 0x08 | 0x80;
-    if (level >= 75)
+    if (level >= 60)
         slotMask |= 0x10 | 0x20 | 0x100;
 
     SetUInt32Value(PLAYER_GLYPHS_ENABLED, slotMask);

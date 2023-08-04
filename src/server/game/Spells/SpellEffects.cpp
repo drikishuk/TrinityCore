@@ -3890,13 +3890,13 @@ void Spell::EffectApplyGlyph(SpellEffIndex effIndex)
     {
         case 0:
         case 1:
-        case 6: minLevel = 25; break;
+        case 6: minLevel = 20; break;
         case 2:
         case 3:
-        case 7: minLevel = 50; break;
+        case 7: minLevel = 40; break;
         case 4:
         case 5:
-        case 8: minLevel = 75; break;
+        case 8: minLevel = 60; break;
     }
 
     if (minLevel && player->getLevel() < minLevel)

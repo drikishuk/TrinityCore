@@ -360,7 +360,7 @@ class TC_GAME_API SpellInfo
         uint32 Targets;
         uint32 TargetCreatureType;
         uint32 RequiresSpellFocus;
-        uint32 FacingCasterFlags;
+        EnumFlag<SpellFacingCasterFlags> FacingCasterFlags = SpellFacingCasterFlags::None;
         uint32 CasterAuraState;
         uint32 TargetAuraState;
         uint32 CasterAuraStateNot;
@@ -415,6 +415,8 @@ class TC_GAME_API SpellInfo
         flag96 SpellFamilyFlags;
         uint32 DmgClass;
         uint32 PreventionType;
+        uint32 MinFactionId;
+        uint32 MinReputation;
         int32  AreaGroupId;
         uint32 SchoolMask;
         uint32 SpellDifficultyId;

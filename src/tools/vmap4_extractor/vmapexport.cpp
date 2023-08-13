@@ -69,10 +69,12 @@ char const* CONF_mpq_list[]=
     "world2.MPQ",
 };
 
-uint32 const Builds[] = {13164, 13205, 13287, 13329, 13596, 13623, 13914, 14007, 14333, 14480, 14545, 15005, 15050, 15211, 15354, 15595, 0};
+// Franca: Add CLIENT_BUILD as 99999 and add custom MPQ build values to the builds array as needed.
+
+uint32 const Builds[] = { 13164, 13205, 13287, 13329, 13596, 13623, 13914, 14007, 14333, 14480, 14545, 15005, 15050, 15211, 15354, 15595, 16000, 16001, 16002, 16003, 16999, 0 };
 #define LAST_DBC_IN_DATA_BUILD 13623    // after this build mpqs with dbc are back to locale folder
 #define NEW_BASE_SET_BUILD  15211
-#define CLIENT_BUILD 15595
+#define CLIENT_BUILD 99999 // 15595
 
 #define LOCALES_COUNT 15
 

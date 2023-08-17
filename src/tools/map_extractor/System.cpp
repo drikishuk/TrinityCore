@@ -1013,7 +1013,10 @@ bool IsDeepWaterIgnored(uint32 mapId, uint32 x, uint32 y)
         //GRID(46, 18) || GRID(46, 19) || GRID(46, 20) || GRID(46, 21) || GRID(46, 22) || GRID(46, 23) || GRID(46, 24) || GRID(46, 25) || GRID(46, 26)
 
         // Vashj'ir grids completely ignore fatigue
-        return (x >= 39 && x <= 40 && y >= 24 && y <= 26) || (x >= 41 && x <= 46 && y >= 18 && y <= 26);
+        // return (x >= 39 && x <= 40 && y >= 24 && y <= 26) || (x >= 41 && x <= 46 && y >= 18 && y <= 26);
+
+        // Vashj'ir grids + custom Origin map ignore fatigue
+        return (x >= 47 && x <= 51 && y >= 20 && y <= 24);
     }
 
     if (mapId == 1)

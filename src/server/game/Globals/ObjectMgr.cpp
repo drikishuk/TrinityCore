@@ -3718,8 +3718,12 @@ void ObjectMgr::LoadPlayerInfo()
     {
         uint32 oldMSTime = getMSTime();
 
-        //                                                 0     1      2      3    4    5    6    7
-        QueryResult result  = WorldDatabase.Query("SELECT race, class, level, str, agi, sta, inte, spi FROM player_levelstats");
+        // Franca: Resilience Feature [Origin]
+        //                                                 0     1      2      3    4    5    6    7    8
+        QueryResult result = WorldDatabase.Query("SELECT race, class, level, str, agi, sta, inte, spi, res FROM player_levelstats");
+
+        //                                                   0     1      2      3    4    5    6    7
+        //QueryResult result  = WorldDatabase.Query("SELECT race, class, level, str, agi, sta, inte, spi FROM player_levelstats");
 
         if (!result)
         {
@@ -3768,6 +3772,10 @@ void ObjectMgr::LoadPlayerInfo()
                 PlayerLevelInfo& levelInfo = info->levelInfo[current_level - 1];
                 for (int i = 0; i < MAX_STATS; i++)
                     levelInfo.stats[i] = fields[i + 3].GetUInt8();
+
+                // Franca: Resilience Feature [Origin]
+                levelInfo.resilience = fields[8].GetUInt8();
+                
             }
 
             ++count;

@@ -2353,6 +2353,11 @@ void Player::GiveLevel(uint8 level)
                     SetByteFlag(PLAYER_FIELD_BYTES, PLAYER_FIELD_BYTES_OFFSET_RAF_GRANTABLE_LEVEL, 0x01);
             }
 
+    // Franca: Calculate base resilience value for level up [Resilience Feature - Origin]
+    PlayerLevelInfo oldInfo;
+    sObjectMgr->GetPlayerLevelInfo(getRace(), getClass(), oldLevel, &oldInfo);
+    ApplyRatingMod(CR_RESILIENCE_PLAYER_DAMAGE_TAKEN, level > oldLevel ? info.resilience - oldInfo.resilience : oldInfo.resilience - info.resilience, level > oldLevel);
+
     sScriptMgr->OnPlayerLevelChanged(this, oldLevel);
 }
 
@@ -2522,6 +2527,7 @@ void Player::InitStatsForLevel(bool reapplyMods)
 
     SetUInt32Value(PLAYER_FIELD_MOD_TARGET_RESISTANCE, 0);
     SetUInt32Value(PLAYER_FIELD_MOD_TARGET_PHYSICAL_RESISTANCE, 0);
+
     for (uint8 i = 0; i < MAX_SPELL_SCHOOL; ++i)
     {
         SetUInt32Value(UNIT_FIELD_POWER_COST_MODIFIER+i, 0);
@@ -2578,6 +2584,9 @@ void Player::InitStatsForLevel(bool reapplyMods)
     // update level to hunter/summon pet
     if (Pet* pet = GetPet())
         pet->SynchronizeLevelWithOwner();
+
+    // Franca: Load base resilience value for init level [Resilience Feature - Origin]
+    ApplyRatingMod(CR_RESILIENCE_PLAYER_DAMAGE_TAKEN, info.resilience, true);
 }
 
 void Player::SendKnownSpells(bool firstLogin /*= false*/)

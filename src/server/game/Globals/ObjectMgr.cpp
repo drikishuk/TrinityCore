@@ -3774,7 +3774,7 @@ void ObjectMgr::LoadPlayerInfo()
                     levelInfo.stats[i] = fields[i + 3].GetUInt8();
 
                 // Franca: Resilience Feature [Origin]
-                levelInfo.resilience = fields[8].GetUInt8();
+                levelInfo.resilience = fields[8].GetUInt16();
                 
             }
 

@@ -673,7 +673,7 @@ struct PlayerLevelInfo
     uint8 stats[MAX_STATS];
 
     // Franca: Resilience feature [Origin]
-    uint8 resilience;
+    uint16 resilience;
 };
 
 typedef std::vector<uint32> PlayerCreateInfoSpells;

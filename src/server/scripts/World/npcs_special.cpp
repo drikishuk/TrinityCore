@@ -302,9 +302,9 @@ public:
 
 enum DancingFlames
 {
-    SPELL_BRAZIER           = 45423,
-    SPELL_SEDUCTION         = 47057,
-    SPELL_FIERY_AURA        = 45427
+    SPELL_SUMMON_BRAZIER    = 45423,
+    SPELL_BRAZIER_DANCE     = 45427,
+    SPELL_FIERY_SEDUCTION   = 47057
 };
 
 class npc_dancing_flames : public CreatureScript
@@ -330,29 +330,17 @@ public:
 
         void Reset() override
         {
-            Initialize();
-            DoCast(me, SPELL_BRAZIER, true);
-            DoCast(me, SPELL_FIERY_AURA, false);
+            DoCastSelf(SPELL_SUMMON_BRAZIER, true);
+            DoCastSelf(SPELL_BRAZIER_DANCE, false);
+            me->HandleEmoteCommand(EMOTE_STATE_DANCE);
             float x, y, z;
             me->GetPosition(x, y, z);
-            me->Relocate(x, y, z + 0.94f);
-            me->SetDisableGravity(true);
-            me->HandleEmoteCommand(EMOTE_ONESHOT_DANCE);
+            me->Relocate(x, y, z + 1.05f);
         }
 
         void UpdateAI(uint32 diff) override
         {
-            if (!Active)
-            {
-                if (CanIteract <= diff)
-                {
-                    Active = true;
-                    CanIteract = 3500;
-                    me->HandleEmoteCommand(EMOTE_ONESHOT_DANCE);
-                }
-                else
-                    CanIteract -= diff;
-            }
+            _scheduler.Update(diff);
         }
 
         void JustEngagedWith(Unit* /*who*/) override { }
@@ -361,30 +349,51 @@ public:
         {
             if (me->IsWithinLOS(player->GetPositionX(), player->GetPositionY(), player->GetPositionZ()) && me->IsWithinDistInMap(player, 30.0f))
             {
-                me->SetOrientationTowards(player);
-                Active = false;
+                // She responds to emotes not instantly but ~1500ms later
+                // If you first /bow, then /wave before dancing flames bow back, it doesnt bow at all and only does wave
+                // If you're performing emotes too fast, she will not respond to them
+                // Means she just replaces currently scheduled event with new after receiving new emote
+                _scheduler.CancelAll();
 
                 switch (emote)
                 {
-                    case TEXT_EMOTE_KISS:
-                        me->HandleEmoteCommand(EMOTE_ONESHOT_SHY);
-                        break;
-                    case TEXT_EMOTE_WAVE:
-                        me->HandleEmoteCommand(EMOTE_ONESHOT_WAVE);
-                        break;
-                    case TEXT_EMOTE_BOW:
-                        me->HandleEmoteCommand(EMOTE_ONESHOT_BOW);
-                        break;
-                    case TEXT_EMOTE_JOKE:
-                        me->HandleEmoteCommand(EMOTE_ONESHOT_LAUGH);
-                        break;
-                    case TEXT_EMOTE_DANCE:
-                        if (!player->HasAura(SPELL_SEDUCTION))
-                            DoCast(player, SPELL_SEDUCTION, true);
-                        break;
+                case TEXT_EMOTE_KISS:
+                    _scheduler.Schedule(1500ms, [this](TaskContext /*context*/)
+                        {
+                            me->HandleEmoteCommand(EMOTE_ONESHOT_SHY);
+                        });
+                    break;
+                case TEXT_EMOTE_WAVE:
+                    _scheduler.Schedule(1500ms, [this](TaskContext /*context*/)
+                        {
+                            me->HandleEmoteCommand(EMOTE_ONESHOT_WAVE);
+                        });
+                    break;
+                case TEXT_EMOTE_BOW:
+                    _scheduler.Schedule(1500ms, [this](TaskContext /*context*/)
+                        {
+                            me->HandleEmoteCommand(EMOTE_ONESHOT_BOW);
+                        });
+                    break;
+                case TEXT_EMOTE_JOKE:
+                    _scheduler.Schedule(1500ms, [this](TaskContext /*context*/)
+                        {
+                            me->HandleEmoteCommand(EMOTE_ONESHOT_LAUGH);
+                        });
+                    break;
+                case TEXT_EMOTE_DANCE:
+                    if (!player->HasAura(SPELL_FIERY_SEDUCTION))
+                    {
+                        DoCast(player, SPELL_FIERY_SEDUCTION, true);
+                        me->SetFacingTo(me->GetAngle(player));
+                    }
+                    break;
                 }
             }
         }
+
+    private:
+        TaskScheduler _scheduler;
     };
 
     CreatureAI* GetAI(Creature* creature) const override
@@ -1724,30 +1733,35 @@ enum TrainingDummy
     SPELL_ARCANE_MISSILES                      = 5143,
 };
 
-struct npc_training_dummy : NullCreatureAI
+class npc_training_dummy : public CreatureScript
 {
-    npc_training_dummy(Creature* creature) : NullCreatureAI(creature)
+public:
+    npc_training_dummy() : CreatureScript("npc_training_dummy") { }
+
+    struct npc_training_dummy_AI : NullCreatureAI
     {
-        uint32 const entry = me->GetEntry();
-        if (entry == NPC_TARGET_DUMMY || entry == NPC_ADVANCED_TARGET_DUMMY)
-            me->DespawnOrUnsummon(16s);
-    }
-
-    void DamageTaken(Unit* attacker, uint32& damage) override
-    {
-        damage = 0;
-
-        if (!attacker)
-            return;
-
-        _combatTimer[attacker->GetGUID()] = int32(5 * IN_MILLISECONDS);
-    }
-
-    // Todo: the involved training dummys have a proc aura for that. Drop this part here, once converted.
-    void SpellHit(WorldObject* caster, SpellInfo const* spell) override
-    {
-        switch (spell->Id)
+        npc_training_dummy_AI(Creature* creature) : NullCreatureAI(creature)
         {
+            uint32 const entry = me->GetEntry();
+            if (entry == NPC_TARGET_DUMMY || entry == NPC_ADVANCED_TARGET_DUMMY)
+                me->DespawnOrUnsummon(16s);
+        }
+
+        void DamageTaken(Unit* attacker, uint32& damage) override
+        {
+            damage = 0;
+
+            if (!attacker)
+                return;
+
+            _combatTimer[attacker->GetGUID()] = int32(5 * IN_MILLISECONDS);
+        }
+
+        // Todo: the involved training dummys have a proc aura for that. Drop this part here, once converted.
+        void SpellHit(WorldObject* caster, SpellInfo const* spell) override
+        {
+            switch (spell->Id)
+            {
             case SPELL_CHARGE:          // Charge - Warrior
             case SPELL_JUDGEMENT:       // Judgement - Paladin
             case SPELL_STEADY_SHOT:     // Steady Shot - Hunter
@@ -1760,29 +1774,35 @@ struct npc_training_dummy : NullCreatureAI
                 break;
             default:
                 break;
-        }
-    }
-
-    void UpdateAI(uint32 diff) override
-    {
-        for (auto itr = _combatTimer.begin(); itr != _combatTimer.end();)
-        {
-            itr->second -= diff;
-            if (itr->second <= 0)
-            {
-                auto const& pveRefs = me->GetCombatManager().GetPvECombatRefs();
-                auto it = pveRefs.find(itr->first);
-                if (it != pveRefs.end())
-                    it->second->EndCombat();
-
-                itr = _combatTimer.erase(itr);
             }
-            else
-                ++itr;
         }
+
+        void UpdateAI(uint32 diff) override
+        {
+            for (auto itr = _combatTimer.begin(); itr != _combatTimer.end();)
+            {
+                itr->second -= diff;
+                if (itr->second <= 0)
+                {
+                    auto const& pveRefs = me->GetCombatManager().GetPvECombatRefs();
+                    auto it = pveRefs.find(itr->first);
+                    if (it != pveRefs.end())
+                        it->second->EndCombat();
+
+                    itr = _combatTimer.erase(itr);
+                }
+                else
+                    ++itr;
+            }
+        }
+    private:
+        std::unordered_map<ObjectGuid /*attackerGUID*/, int32 /*combatTime*/> _combatTimer;
+    };
+
+    CreatureAI* GetAI(Creature* creature) const override
+    {
+        return new npc_training_dummy_AI(creature);
     }
-private:
-    std::unordered_map<ObjectGuid /*attackerGUID*/, int32 /*combatTime*/> _combatTimer;
 };
 
 /*######
@@ -1999,284 +2019,6 @@ class npc_experience : public CreatureScript
         {
             return new npc_experienceAI(creature);
         }
-};
-
-enum Fireworks
-{
-    NPC_OMEN                = 15467,
-    NPC_MINION_OF_OMEN      = 15466,
-    NPC_FIREWORK_BLUE       = 15879,
-    NPC_FIREWORK_GREEN      = 15880,
-    NPC_FIREWORK_PURPLE     = 15881,
-    NPC_FIREWORK_RED        = 15882,
-    NPC_FIREWORK_YELLOW     = 15883,
-    NPC_FIREWORK_WHITE      = 15884,
-    NPC_FIREWORK_BIG_BLUE   = 15885,
-    NPC_FIREWORK_BIG_GREEN  = 15886,
-    NPC_FIREWORK_BIG_PURPLE = 15887,
-    NPC_FIREWORK_BIG_RED    = 15888,
-    NPC_FIREWORK_BIG_YELLOW = 15889,
-    NPC_FIREWORK_BIG_WHITE  = 15890,
-
-    NPC_CLUSTER_BLUE        = 15872,
-    NPC_CLUSTER_RED         = 15873,
-    NPC_CLUSTER_GREEN       = 15874,
-    NPC_CLUSTER_PURPLE      = 15875,
-    NPC_CLUSTER_WHITE       = 15876,
-    NPC_CLUSTER_YELLOW      = 15877,
-    NPC_CLUSTER_BIG_BLUE    = 15911,
-    NPC_CLUSTER_BIG_GREEN   = 15912,
-    NPC_CLUSTER_BIG_PURPLE  = 15913,
-    NPC_CLUSTER_BIG_RED     = 15914,
-    NPC_CLUSTER_BIG_WHITE   = 15915,
-    NPC_CLUSTER_BIG_YELLOW  = 15916,
-    NPC_CLUSTER_ELUNE       = 15918,
-
-    GO_FIREWORK_LAUNCHER_1  = 180771,
-    GO_FIREWORK_LAUNCHER_2  = 180868,
-    GO_FIREWORK_LAUNCHER_3  = 180850,
-    GO_CLUSTER_LAUNCHER_1   = 180772,
-    GO_CLUSTER_LAUNCHER_2   = 180859,
-    GO_CLUSTER_LAUNCHER_3   = 180869,
-    GO_CLUSTER_LAUNCHER_4   = 180874,
-
-    SPELL_ROCKET_BLUE       = 26344,
-    SPELL_ROCKET_GREEN      = 26345,
-    SPELL_ROCKET_PURPLE     = 26346,
-    SPELL_ROCKET_RED        = 26347,
-    SPELL_ROCKET_WHITE      = 26348,
-    SPELL_ROCKET_YELLOW     = 26349,
-    SPELL_ROCKET_BIG_BLUE   = 26351,
-    SPELL_ROCKET_BIG_GREEN  = 26352,
-    SPELL_ROCKET_BIG_PURPLE = 26353,
-    SPELL_ROCKET_BIG_RED    = 26354,
-    SPELL_ROCKET_BIG_WHITE  = 26355,
-    SPELL_ROCKET_BIG_YELLOW = 26356,
-    SPELL_LUNAR_FORTUNE     = 26522,
-
-    ANIM_GO_LAUNCH_FIREWORK = 3,
-    ZONE_MOONGLADE          = 493,
-};
-
-Position omenSummonPos = {7558.993f, -2839.999f, 450.0214f, 4.46f};
-
-class npc_firework : public CreatureScript
-{
-public:
-    npc_firework() : CreatureScript("npc_firework") { }
-
-    struct npc_fireworkAI : public ScriptedAI
-    {
-        npc_fireworkAI(Creature* creature) : ScriptedAI(creature) { }
-
-        bool isCluster()
-        {
-            switch (me->GetEntry())
-            {
-                case NPC_FIREWORK_BLUE:
-                case NPC_FIREWORK_GREEN:
-                case NPC_FIREWORK_PURPLE:
-                case NPC_FIREWORK_RED:
-                case NPC_FIREWORK_YELLOW:
-                case NPC_FIREWORK_WHITE:
-                case NPC_FIREWORK_BIG_BLUE:
-                case NPC_FIREWORK_BIG_GREEN:
-                case NPC_FIREWORK_BIG_PURPLE:
-                case NPC_FIREWORK_BIG_RED:
-                case NPC_FIREWORK_BIG_YELLOW:
-                case NPC_FIREWORK_BIG_WHITE:
-                    return false;
-                case NPC_CLUSTER_BLUE:
-                case NPC_CLUSTER_GREEN:
-                case NPC_CLUSTER_PURPLE:
-                case NPC_CLUSTER_RED:
-                case NPC_CLUSTER_YELLOW:
-                case NPC_CLUSTER_WHITE:
-                case NPC_CLUSTER_BIG_BLUE:
-                case NPC_CLUSTER_BIG_GREEN:
-                case NPC_CLUSTER_BIG_PURPLE:
-                case NPC_CLUSTER_BIG_RED:
-                case NPC_CLUSTER_BIG_YELLOW:
-                case NPC_CLUSTER_BIG_WHITE:
-                case NPC_CLUSTER_ELUNE:
-                default:
-                    return true;
-            }
-        }
-
-        GameObject* FindNearestLauncher()
-        {
-            GameObject* launcher = nullptr;
-
-            if (isCluster())
-            {
-                GameObject* launcher1 = GetClosestGameObjectWithEntry(me, GO_CLUSTER_LAUNCHER_1, 0.5f);
-                GameObject* launcher2 = GetClosestGameObjectWithEntry(me, GO_CLUSTER_LAUNCHER_2, 0.5f);
-                GameObject* launcher3 = GetClosestGameObjectWithEntry(me, GO_CLUSTER_LAUNCHER_3, 0.5f);
-                GameObject* launcher4 = GetClosestGameObjectWithEntry(me, GO_CLUSTER_LAUNCHER_4, 0.5f);
-
-                if (launcher1)
-                    launcher = launcher1;
-                else if (launcher2)
-                    launcher = launcher2;
-                else if (launcher3)
-                    launcher = launcher3;
-                else if (launcher4)
-                    launcher = launcher4;
-            }
-            else
-            {
-                GameObject* launcher1 = GetClosestGameObjectWithEntry(me, GO_FIREWORK_LAUNCHER_1, 0.5f);
-                GameObject* launcher2 = GetClosestGameObjectWithEntry(me, GO_FIREWORK_LAUNCHER_2, 0.5f);
-                GameObject* launcher3 = GetClosestGameObjectWithEntry(me, GO_FIREWORK_LAUNCHER_3, 0.5f);
-
-                if (launcher1)
-                    launcher = launcher1;
-                else if (launcher2)
-                    launcher = launcher2;
-                else if (launcher3)
-                    launcher = launcher3;
-            }
-
-            return launcher;
-        }
-
-        uint32 GetFireworkSpell(uint32 entry)
-        {
-            switch (entry)
-            {
-                case NPC_FIREWORK_BLUE:
-                    return SPELL_ROCKET_BLUE;
-                case NPC_FIREWORK_GREEN:
-                    return SPELL_ROCKET_GREEN;
-                case NPC_FIREWORK_PURPLE:
-                    return SPELL_ROCKET_PURPLE;
-                case NPC_FIREWORK_RED:
-                    return SPELL_ROCKET_RED;
-                case NPC_FIREWORK_YELLOW:
-                    return SPELL_ROCKET_YELLOW;
-                case NPC_FIREWORK_WHITE:
-                    return SPELL_ROCKET_WHITE;
-                case NPC_FIREWORK_BIG_BLUE:
-                    return SPELL_ROCKET_BIG_BLUE;
-                case NPC_FIREWORK_BIG_GREEN:
-                    return SPELL_ROCKET_BIG_GREEN;
-                case NPC_FIREWORK_BIG_PURPLE:
-                    return SPELL_ROCKET_BIG_PURPLE;
-                case NPC_FIREWORK_BIG_RED:
-                    return SPELL_ROCKET_BIG_RED;
-                case NPC_FIREWORK_BIG_YELLOW:
-                    return SPELL_ROCKET_BIG_YELLOW;
-                case NPC_FIREWORK_BIG_WHITE:
-                    return SPELL_ROCKET_BIG_WHITE;
-                default:
-                    return 0;
-            }
-        }
-
-        uint32 GetFireworkGameObjectId()
-        {
-            uint32 spellId = 0;
-
-            switch (me->GetEntry())
-            {
-                case NPC_CLUSTER_BLUE:
-                    spellId = GetFireworkSpell(NPC_FIREWORK_BLUE);
-                    break;
-                case NPC_CLUSTER_GREEN:
-                    spellId = GetFireworkSpell(NPC_FIREWORK_GREEN);
-                    break;
-                case NPC_CLUSTER_PURPLE:
-                    spellId = GetFireworkSpell(NPC_FIREWORK_PURPLE);
-                    break;
-                case NPC_CLUSTER_RED:
-                    spellId = GetFireworkSpell(NPC_FIREWORK_RED);
-                    break;
-                case NPC_CLUSTER_YELLOW:
-                    spellId = GetFireworkSpell(NPC_FIREWORK_YELLOW);
-                    break;
-                case NPC_CLUSTER_WHITE:
-                    spellId = GetFireworkSpell(NPC_FIREWORK_WHITE);
-                    break;
-                case NPC_CLUSTER_BIG_BLUE:
-                    spellId = GetFireworkSpell(NPC_FIREWORK_BIG_BLUE);
-                    break;
-                case NPC_CLUSTER_BIG_GREEN:
-                    spellId = GetFireworkSpell(NPC_FIREWORK_BIG_GREEN);
-                    break;
-                case NPC_CLUSTER_BIG_PURPLE:
-                    spellId = GetFireworkSpell(NPC_FIREWORK_BIG_PURPLE);
-                    break;
-                case NPC_CLUSTER_BIG_RED:
-                    spellId = GetFireworkSpell(NPC_FIREWORK_BIG_RED);
-                    break;
-                case NPC_CLUSTER_BIG_YELLOW:
-                    spellId = GetFireworkSpell(NPC_FIREWORK_BIG_YELLOW);
-                    break;
-                case NPC_CLUSTER_BIG_WHITE:
-                    spellId = GetFireworkSpell(NPC_FIREWORK_BIG_WHITE);
-                    break;
-                case NPC_CLUSTER_ELUNE:
-                    spellId = GetFireworkSpell(urand(NPC_FIREWORK_BLUE, NPC_FIREWORK_WHITE));
-                    break;
-            }
-
-            SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spellId);
-            if (spellInfo && spellInfo->Effects[0].Effect == SPELL_EFFECT_SUMMON_OBJECT_WILD)
-                return spellInfo->Effects[0].MiscValue;
-
-            return 0;
-        }
-
-        void Reset() override
-        {
-            if (GameObject* launcher = FindNearestLauncher())
-            {
-                launcher->SendCustomAnim(ANIM_GO_LAUNCH_FIREWORK);
-                me->SetOrientation(launcher->GetOrientation() + float(M_PI) / 2);
-            }
-            else
-                return;
-
-            if (isCluster())
-            {
-                // Check if we are near Elune'ara lake south, if so try to summon Omen or a minion
-                if (me->GetZoneId() == ZONE_MOONGLADE)
-                {
-                    if (!me->FindNearestCreature(NPC_OMEN, 100.0f) && me->GetDistance2d(omenSummonPos.GetPositionX(), omenSummonPos.GetPositionY()) <= 100.0f)
-                    {
-                        switch (urand(0, 9))
-                        {
-                            case 0:
-                            case 1:
-                            case 2:
-                            case 3:
-                                if (Creature* minion = me->SummonCreature(NPC_MINION_OF_OMEN, me->GetPositionX()+frand(-5.0f, 5.0f), me->GetPositionY()+frand(-5.0f, 5.0f), me->GetPositionZ(), 0.0f, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 20000))
-                                    minion->AI()->AttackStart(me->SelectNearestPlayer(20.0f));
-                                break;
-                            case 9:
-                                me->SummonCreature(NPC_OMEN, omenSummonPos);
-                                break;
-                        }
-                    }
-                }
-                if (me->GetEntry() == NPC_CLUSTER_ELUNE)
-                    DoCast(SPELL_LUNAR_FORTUNE);
-
-                float displacement = 0.7f;
-                for (uint8 i = 0; i < 4; i++)
-                    me->SummonGameObject(GetFireworkGameObjectId(), me->GetPositionX() + (i % 2 == 0 ? displacement : -displacement), me->GetPositionY() + (i > 1 ? displacement : -displacement), me->GetPositionZ() + 4.0f, me->GetOrientation(), QuaternionData(), 1);
-            }
-            else
-                //me->CastSpell(me, GetFireworkSpell(me->GetEntry()), true);
-                me->CastSpell({ me->GetPositionX(), me->GetPositionY(), me->GetPositionZ() }, GetFireworkSpell(me->GetEntry()), true);
-        }
-    };
-
-    CreatureAI* GetAI(Creature* creature) const override
-    {
-        return new npc_fireworkAI(creature);
-    }
 };
 
 /*#####
@@ -2922,76 +2664,85 @@ enum MageOrb
 };
 
 // Frostfire Orb / Flaming Orb
- struct npc_mage_orb : public ScriptedAI
- {
-     npc_mage_orb(Creature* creature) : ScriptedAI(creature) { }
+class npc_mage_orb : public CreatureScript
+{
+public:
+    npc_mage_orb() : CreatureScript("npc_mage_orb") { }
+    struct npc_mage_orb_AI : public ScriptedAI
+    {
+        npc_mage_orb_AI(Creature* creature) : ScriptedAI(creature) { }
 
-     void AttackStart(Unit* /*target*/) override
-     {
-         // Calling MovePoint again to apply movement speed changes
-         if (me->isMoving())
-             me->GetMotionMaster()->MovePoint(0, pos);
-     }
+        void AttackStart(Unit* /*target*/) override
+        {
+            // Calling MovePoint again to apply movement speed changes
+            if (me->isMoving())
+                me->GetMotionMaster()->MovePoint(0, pos);
+        }
 
-     void IsSummonedBy(Unit* summoner) override
-     {
-         pos = summoner->GetPosition();
-         pos.m_positionZ += 2.0f; // increasing the height to avoid terrain hickups
-         summoner->MovePositionToFirstCollision(pos, 100.0f, 0.0f);
-         events.ScheduleEvent(EVENT_MOVE_FORWARD, Milliseconds(1));
-         events.ScheduleEvent(EVENT_APPLY_PERIODIC_EFFECT, Milliseconds(400));
-         events.ScheduleEvent(EVENT_EARLY_EXPLOSION, Seconds(5));
-         events.ScheduleEvent(EVENT_EXPLODE, Seconds(15) + Milliseconds(400));
-     }
+        void IsSummonedBy(Unit* summoner) override
+        {
+            pos = summoner->GetPosition();
+            pos.m_positionZ += 2.0f; // increasing the height to avoid terrain hickups
+            summoner->MovePositionToFirstCollision(pos, 100.0f, 0.0f);
+            events.ScheduleEvent(EVENT_MOVE_FORWARD, Milliseconds(1));
+            events.ScheduleEvent(EVENT_APPLY_PERIODIC_EFFECT, Milliseconds(400));
+            events.ScheduleEvent(EVENT_EARLY_EXPLOSION, Seconds(5));
+            events.ScheduleEvent(EVENT_EXPLODE, Seconds(15) + Milliseconds(400));
+        }
 
-     void UpdateAI(uint32 diff) override
-     {
-         events.Update(diff);
+        void UpdateAI(uint32 diff) override
+        {
+            events.Update(diff);
 
-         if (uint32 eventId = events.ExecuteEvent())
-         {
-             switch (eventId)
-             {
-                 case EVENT_MOVE_FORWARD:
-                     me->GetMotionMaster()->Clear();
-                     me->GetMotionMaster()->MovePoint(0, pos);
-                     break;
-                 case EVENT_APPLY_PERIODIC_EFFECT:
-                     DoCastSelf(me->GetEntry() == NPC_FLAME_ORB ? SPELL_FLAME_ORB_AURA : SPELL_FROSTFIRE_ORB_AURA, true);
-                     break;
-                 case EVENT_EARLY_EXPLOSION:
-                     if (!me->IsInCombat())
-                         if (Unit* summoner = me->ToTempSummon()->GetSummoner())
-                             if (Aura* aura = summoner->GetAuraOfRankedSpell(SPELL_FIRE_POWER_R1))
-                                 if (roll_chance_i(aura->GetSpellInfo()->ProcChance))
-                                 {
-                                     Position explPos = me->GetPosition();
-                                     float z = explPos.GetPositionZ() - me->GetFloatValue(UNIT_FIELD_HOVERHEIGHT);
-                                     summoner->CastSpell({ explPos.GetPositionX(), explPos.GetPositionY(), z }, SPELL_FIRE_POWER_EXPLOSION, true);
-                                     me->DespawnOrUnsummon();
-                                 }
-                     break;
-                 case EVENT_EXPLODE:
-                     if (Unit* summoner = me->ToTempSummon()->GetSummoner())
-                         if (Aura* aura = summoner->GetAuraOfRankedSpell(SPELL_FIRE_POWER_R1))
-                             if (roll_chance_i(aura->GetSpellInfo()->ProcChance))
-                             {
-                                 Position explPos = me->GetPosition();
-                                 float z = explPos.GetPositionZ() - me->GetFloatValue(UNIT_FIELD_HOVERHEIGHT);
-                                 summoner->CastSpell({ explPos.GetPositionX(), explPos.GetPositionY(), z }, SPELL_FIRE_POWER_EXPLOSION, true);
-                                 me->DespawnOrUnsummon();
-                             }
-                     break;
-                 default:
-                     break;
-             }
-         }
-     }
- private:
-     EventMap events;
-     Position pos;
- };
+            if (uint32 eventId = events.ExecuteEvent())
+            {
+                switch (eventId)
+                {
+                case EVENT_MOVE_FORWARD:
+                    me->GetMotionMaster()->Clear();
+                    me->GetMotionMaster()->MovePoint(0, pos);
+                    break;
+                case EVENT_APPLY_PERIODIC_EFFECT:
+                    DoCastSelf(me->GetEntry() == NPC_FLAME_ORB ? SPELL_FLAME_ORB_AURA : SPELL_FROSTFIRE_ORB_AURA, true);
+                    break;
+                case EVENT_EARLY_EXPLOSION:
+                    if (!me->IsInCombat())
+                        if (Unit* summoner = me->ToTempSummon()->GetSummoner())
+                            if (Aura* aura = summoner->GetAuraOfRankedSpell(SPELL_FIRE_POWER_R1))
+                                if (roll_chance_i(aura->GetSpellInfo()->ProcChance))
+                                {
+                                    Position explPos = me->GetPosition();
+                                    float z = explPos.GetPositionZ() - me->GetFloatValue(UNIT_FIELD_HOVERHEIGHT);
+                                    summoner->CastSpell({ explPos.GetPositionX(), explPos.GetPositionY(), z }, SPELL_FIRE_POWER_EXPLOSION, true);
+                                    me->DespawnOrUnsummon();
+                                }
+                    break;
+                case EVENT_EXPLODE:
+                    if (Unit* summoner = me->ToTempSummon()->GetSummoner())
+                        if (Aura* aura = summoner->GetAuraOfRankedSpell(SPELL_FIRE_POWER_R1))
+                            if (roll_chance_i(aura->GetSpellInfo()->ProcChance))
+                            {
+                                Position explPos = me->GetPosition();
+                                float z = explPos.GetPositionZ() - me->GetFloatValue(UNIT_FIELD_HOVERHEIGHT);
+                                summoner->CastSpell({ explPos.GetPositionX(), explPos.GetPositionY(), z }, SPELL_FIRE_POWER_EXPLOSION, true);
+                                me->DespawnOrUnsummon();
+                            }
+                    break;
+                default:
+                    break;
+                }
+            }
+        }
+    private:
+        EventMap events;
+        Position pos;
+    };
 
+    CreatureAI* GetAI(Creature* creature) const override
+    {
+        return new npc_mage_orb_AI(creature);
+    }
+};
 
 enum DruidTreant
 {
@@ -3052,35 +2803,39 @@ enum WhackAGnoll
     EVENT_TRIGGERED_SUBMERGE
 };
 
-struct npc_darkmoon_island_gnoll : public ScriptedAI
+class npc_darkmoon_island_gnoll : public CreatureScript
 {
-    npc_darkmoon_island_gnoll(Creature* creature) : ScriptedAI(creature)
+public:
+    npc_darkmoon_island_gnoll() : CreatureScript("npc_darkmoon_island_gnoll") { }
+    struct npc_darkmoon_island_gnoll_AI : public ScriptedAI
     {
-        Initialize();
-    }
-
-    void Initialize()
-    {
-        _hit = false;
-    }
-
-    void IsSummonedBy(Unit* /*summoner*/) override
-    {
-        DoCastSelf(SPELL_WHACK_A_GNOLL_SPAWN);
-        _events.ScheduleEvent(EVENT_REGULAR_SUBMERGE, 3s + 500ms);
-    }
-
-    void SpellHit(WorldObject* caster, SpellInfo const* spell) override
-    {
-        if (!caster || _hit)
-            return;
-
-        if (spell->Id == SPELL_WHACK)
+        npc_darkmoon_island_gnoll_AI(Creature* creature) : ScriptedAI(creature)
         {
-            _events.CancelEvent(EVENT_REGULAR_SUBMERGE);
+            Initialize();
+        }
 
-            switch (me->GetEntry())
+        void Initialize()
+        {
+            _hit = false;
+        }
+
+        void IsSummonedBy(Unit* /*summoner*/) override
+        {
+            DoCastSelf(SPELL_WHACK_A_GNOLL_SPAWN);
+            _events.ScheduleEvent(EVENT_REGULAR_SUBMERGE, 3s + 500ms);
+        }
+
+        void SpellHit(WorldObject* caster, SpellInfo const* spell) override
+        {
+            if (!caster || _hit)
+                return;
+
+            if (spell->Id == SPELL_WHACK)
             {
+                _events.CancelEvent(EVENT_REGULAR_SUBMERGE);
+
+                switch (me->GetEntry())
+                {
                 case NPC_DARKMOON_FAIRE_GNOLL:
                     //DoCast(caster, SPELL_WHACK_A_GNOLL_KILL_CREDIT, true);
                     caster->CastSpell(caster, SPELL_WHACK_A_GNOLL_KILL_CREDIT, true);
@@ -3091,7 +2846,7 @@ struct npc_darkmoon_island_gnoll : public ScriptedAI
                 case NPC_DARKMOON_FAIRE_GNOLL_BONUS:
                     for (uint8 i = 0; i < 3; i++)
                         caster->CastSpell(caster, SPELL_WHACK_A_GNOLL_KILL_CREDIT, true);
-                        //DoCast(caster, SPELL_WHACK_A_GNOLL_KILL_CREDIT, true);
+                    //DoCast(caster, SPELL_WHACK_A_GNOLL_KILL_CREDIT, true);
                     DoCastSelf(SPELL_EXPLODE_BIG);
                     me->KillSelf();
                     me->DespawnOrUnsummon(2s);
@@ -3105,20 +2860,20 @@ struct npc_darkmoon_island_gnoll : public ScriptedAI
                     break;
                 default:
                     break;
+                }
+
+                _hit = true;
             }
-
-            _hit = true;
         }
-    }
 
-    void UpdateAI(uint32 diff) override
-    {
-        _events.Update(diff);
-
-        while (uint32 eventId = _events.ExecuteEvent())
+        void UpdateAI(uint32 diff) override
         {
-            switch (eventId)
+            _events.Update(diff);
+
+            while (uint32 eventId = _events.ExecuteEvent())
             {
+                switch (eventId)
+                {
                 case EVENT_REGULAR_SUBMERGE:
                     _hit = true;
                     me->SetAIAnimKitId(AI_ANIM_KIT_SUBMERGE);
@@ -3135,13 +2890,19 @@ struct npc_darkmoon_island_gnoll : public ScriptedAI
                     break;
                 default:
                     break;
+                }
             }
         }
-    }
 
-private:
-    EventMap _events;
-    bool _hit;
+    private:
+        EventMap _events;
+        bool _hit;
+    };
+
+    CreatureAI* GetAI(Creature* creature) const override
+    {
+        return new npc_darkmoon_island_gnoll_AI(creature);
+    }
 };
 
 void AddSC_npcs_special()
@@ -3160,18 +2921,17 @@ void AddSC_npcs_special()
     new npc_tonk_mine();
     new npc_tournament_mount();
     new npc_brewfest_reveler();
-    RegisterCreatureAI(npc_training_dummy);
+    new npc_training_dummy();
     new npc_wormhole();
     new npc_pet_trainer();
     new npc_experience();
-    new npc_firework();
     new npc_spring_rabbit();
     new npc_imp_in_a_ball();
     new npc_stable_master();
     new npc_train_wrecker();
     new npc_argent_squire_gruntling();
     new npc_bountiful_table();
-    RegisterCreatureAI(npc_mage_orb);
+    new npc_mage_orb();
     new npc_druid_treant();
-    RegisterCreatureAI(npc_darkmoon_island_gnoll);
+    new npc_darkmoon_island_gnoll();
 }

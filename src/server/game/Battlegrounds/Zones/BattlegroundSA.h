@@ -611,6 +611,9 @@ class BattlegroundSA : public Battleground
 
         /* Scorekeeping */
 
+        // Achievement: Not Even a Scratch
+        // bool CheckAchievementCriteriaMeet(uint32 criteriaId, Player const* source, Unit const* target = nullptr, uint32 miscValue = 0) override;
+
         // Control Phase Shift
         bool IsSpellAllowed(uint32 spellId, Player const* player) const override;
 

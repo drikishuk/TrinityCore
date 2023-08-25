@@ -824,9 +824,104 @@ public:
     }
 };
 
+/*######
+## Quest 9670: They're Alive! Maybe...
+######*/
+
+enum FreeWebbedBloodmyst
+{
+    SPELL_FREE_WEBBED_1 = 30954,
+    SPELL_FREE_WEBBED_2 = 30955,
+    SPELL_FREE_WEBBED_3 = 30956,
+    SPELL_FREE_WEBBED_4 = 30957,
+    SPELL_FREE_WEBBED_5 = 30958,
+    SPELL_FREE_WEBBED_6 = 30959,
+    SPELL_FREE_WEBBED_7 = 30960,
+    SPELL_FREE_WEBBED_8 = 30961,
+    SPELL_FREE_WEBBED_9 = 30962,
+    SPELL_FREE_WEBBED_10 = 30963,
+    SPELL_FREE_WEBBED_11 = 31010
+};
+
+uint32 const CocoonSummonSpells[10] =
+{
+    SPELL_FREE_WEBBED_1, SPELL_FREE_WEBBED_2, SPELL_FREE_WEBBED_3, SPELL_FREE_WEBBED_4, SPELL_FREE_WEBBED_5,
+    SPELL_FREE_WEBBED_6, SPELL_FREE_WEBBED_7, SPELL_FREE_WEBBED_8, SPELL_FREE_WEBBED_9, SPELL_FREE_WEBBED_10
+};
+
+// 30950 - Free Webbed Creature
+class spell_free_webbed : public SpellScriptLoader
+{
+public:
+    spell_free_webbed() : SpellScriptLoader("spell_free_webbed") { }
+
+    class spell_free_webbed_SpellScript : public SpellScript
+    {
+        bool Validate(SpellInfo const* /*spellInfo*/) override
+        {
+            return ValidateSpellInfo(CocoonSummonSpells);
+        }
+
+        void HandleDummy(SpellEffIndex /*effIndex*/)
+        {
+            GetCaster()->CastSpell(GetCaster(), Trinity::Containers::SelectRandomContainerElement(CocoonSummonSpells), true);
+        }
+
+        void Register() override
+        {
+            OnEffectHit.Register(&spell_free_webbed_SpellScript::HandleDummy, EFFECT_0, SPELL_EFFECT_DUMMY);
+        }
+    };
+
+    SpellScript* GetSpellScript() const override
+    {
+        return new spell_free_webbed_SpellScript();
+    }
+};
+
+// 31009 - Free Webbed Creature
+class spell_free_webbed_on_quest : public SpellScriptLoader
+{
+public:
+    spell_free_webbed_on_quest() : SpellScriptLoader("spell_free_webbed_on_quest") { }
+
+    class spell_free_webbed_on_quest_SpellScript : public SpellScript
+    {
+        bool Validate(SpellInfo const* /*spellInfo*/) override
+        {
+            return ValidateSpellInfo(CocoonSummonSpells) && ValidateSpellInfo({ SPELL_FREE_WEBBED_11 });
+        }
+
+        // This one is a bit different from the one used in Terokkar. There is additional spell 31011 which apply periodic aura to trigger
+        // summon spell 31010 after 1.5 sec. However in retail Expedition Researcher is summoned instantly, we'll use 31010 directly
+        void HandleDummy(SpellEffIndex /*effIndex*/)
+        {
+            Unit* caster = GetCaster();
+            Unit* target = GetHitUnit();
+
+            if (roll_chance_i(66))
+                caster->CastSpell(caster, Trinity::Containers::SelectRandomContainerElement(CocoonSummonSpells), true);
+            else
+                target->CastSpell(caster, SPELL_FREE_WEBBED_11, true);
+        }
+
+        void Register() override
+        {
+            OnEffectHitTarget.Register(&spell_free_webbed_on_quest_SpellScript::HandleDummy, EFFECT_0, SPELL_EFFECT_DUMMY);
+        }
+    };
+
+    SpellScript* GetSpellScript() const override
+    {
+        return new spell_free_webbed_on_quest_SpellScript();
+    }
+};
+
 void AddSC_bloodmyst_isle()
 {
     new npc_webbed_creature();
     new npc_sironas();
     new npc_demolitionist_legoso();
+    new spell_free_webbed();
+    new spell_free_webbed_on_quest();
 }

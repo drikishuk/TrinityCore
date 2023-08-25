@@ -127,6 +127,12 @@ void WorldSession::SendTrainerList(Creature* npc, uint32 trainerId)
         return;
     }
 
+    if (!trainer->IsTrainerValidForPlayer(_player))
+    {
+        TC_LOG_DEBUG("network", "WorldSession: SendTrainerList - trainer {} not valid for player {}", npc->GetGUID().ToString(), GetPlayerInfo());
+        return;
+    }
+
     _player->PlayerTalkClass->GetInteractionData().Reset();
     _player->PlayerTalkClass->GetInteractionData().SourceGuid = npc->GetGUID();
     _player->PlayerTalkClass->GetInteractionData().TrainerId = trainerId;

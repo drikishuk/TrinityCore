@@ -827,3 +827,17 @@ uint32 BattlegroundWS::GetPrematureWinner()
 
     return Battleground::GetPrematureWinner();
 }
+
+bool BattlegroundWS::CheckAchievementCriteriaMeet(uint32 criteriaId, Player const* player, Unit const* target, uint32 miscValue)
+{
+    switch (criteriaId)
+    {
+    case BG_CRITERIA_CHECK_SAVE_THE_DAY:
+        if (target)
+            if (Player const* playerTarget = target->ToPlayer())
+                return GetFlagState(playerTarget->GetTeam()) == BG_WS_FLAG_STATE_ON_BASE;
+        return false;
+    }
+
+    return Battleground::CheckAchievementCriteriaMeet(criteriaId, player, target, miscValue);
+}

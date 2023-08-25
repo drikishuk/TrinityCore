@@ -96,6 +96,7 @@ public:
 
                     me->FollowTarget(unitCaster);
                     me->setActive(true);
+                    me->RemoveFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_GOSSIP);
                 }
             }
             else if (spell->Id == SPELL_KODO_KOMBO_GOSSIP)

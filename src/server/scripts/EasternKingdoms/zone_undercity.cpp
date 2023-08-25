@@ -265,11 +265,6 @@ class npc_highborne_lamenter : public CreatureScript
 public:
     npc_highborne_lamenter() : CreatureScript("npc_highborne_lamenter") { }
 
-    CreatureAI* GetAI(Creature* creature) const override
-    {
-        return new npc_highborne_lamenterAI(creature);
-    }
-
     struct npc_highborne_lamenterAI : public ScriptedAI
     {
         npc_highborne_lamenterAI(Creature* creature) : ScriptedAI(creature)
@@ -319,6 +314,11 @@ public:
             }
         }
     };
+
+    CreatureAI* GetAI(Creature* creature) const override
+    {
+        return new npc_highborne_lamenterAI(creature);
+    }
 };
 
 /*######

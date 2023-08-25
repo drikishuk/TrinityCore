@@ -48,6 +48,16 @@ enum BattlegroundDesertionType
     BG_DESERTION_TYPE_INVITE_LOGOUT   = 4, // player is invited to join and logs out
 };
 
+enum BattlegroundCriteriaId
+{
+    BG_CRITERIA_CHECK_RESILIENT_VICTORY,
+    BG_CRITERIA_CHECK_SAVE_THE_DAY,
+    BG_CRITERIA_CHECK_EVERYTHING_COUNTS,
+    BG_CRITERIA_CHECK_AV_PERFECTION,
+    BG_CRITERIA_CHECK_DEFENSE_OF_THE_ANCIENTS,
+    BG_CRITERIA_CHECK_NOT_EVEN_A_SCRATCH,
+};
+
 enum BattlegroundBroadcastTexts
 {
     BG_TEXT_ALLIANCE_WINS       = 10633,
@@ -243,7 +253,12 @@ class TC_GAME_API Battleground
 
         virtual void DestroyGate(Player* /*player*/, GameObject* /*go*/) { }
 
+        /* achievement req. */
+        virtual bool IsAllNodesControlledByTeam(uint32 /*team*/) const { return false; }
+        // Franca: `TriggerGameEvent` already does what `StartTimedAchievement` does. `StartTimedAchievement` may be a more up-to-date version. Look at it later.
+        // void StartTimedAchievement(AchievementCriteriaTimedTypes type, uint32 entry);
         void TriggerGameEvent(uint32 gameEventId);
+        virtual bool CheckAchievementCriteriaMeet(uint32 /*criteriaId*/, Player const* /*player*/, Unit const* /*target*/ = nullptr, uint32 /*miscvalue1*/ = 0);
 
         /* Battleground */
         // Get methods:

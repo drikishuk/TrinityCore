@@ -562,7 +562,7 @@ public:
                     Spark->DisappearAndDie();
                     DespawnNagaFlag(false);
                     me->DisappearAndDie();
-                    return 99999999;
+                    [[fallthrough]];
                 default:
                     return 99999999;
             }
@@ -718,12 +718,81 @@ public:
     }
 };
 
+// 29528 - Inoculate Nestlewood Owlkin
+class spell_inoculate_nestlewood : public SpellScriptLoader
+{
+public:
+    spell_inoculate_nestlewood() : SpellScriptLoader("spell_inoculate_nestlewood") { }
+
+    class spell_inoculate_nestlewood_AuraScript : public AuraScript
+    {
+        void PeriodicTick(AuraEffect const* /*aurEff*/)
+        {
+            if (GetTarget()->GetTypeId() != TYPEID_UNIT) // prevent error reports in case ignored player target
+                PreventDefaultAction();
+        }
+
+        void Register() override
+        {
+            OnEffectPeriodic.Register(&spell_inoculate_nestlewood_AuraScript::PeriodicTick, EFFECT_0, SPELL_AURA_PERIODIC_TRIGGER_SPELL);
+        }
+    };
+
+    AuraScript* GetAuraScript() const override
+    {
+        return new spell_inoculate_nestlewood_AuraScript();
+    }
+};
+
+/*######
+## Quest 9452: Red Snapper - Very Tasty!
+######*/
+
+enum RedSnapperVeryTasty
+{
+    SPELL_FISHED_UP_RED_SNAPPER = 29867,
+    SPELL_FISHED_UP_MURLOC = 29869
+};
+
+// 29866 - Cast Fishing Net
+class spell_azuremyst_isle_cast_fishing_net : public SpellScriptLoader
+{
+public:
+    spell_azuremyst_isle_cast_fishing_net() : SpellScriptLoader("spell_azuremyst_isle_cast_fishing_net") { }
+
+    class spell_azuremyst_isle_cast_fishing_net_SpellScript : public SpellScript
+    {
+        bool Validate(SpellInfo const* /*spellInfo*/) override
+        {
+            return ValidateSpellInfo({ SPELL_FISHED_UP_RED_SNAPPER, SPELL_FISHED_UP_MURLOC });
+        }
+
+        void HandleDummy(SpellEffIndex /*effIndex*/)
+        {
+            GetCaster()->CastSpell(GetCaster(), roll_chance_i(66) ? SPELL_FISHED_UP_RED_SNAPPER : SPELL_FISHED_UP_MURLOC);
+        }
+
+        void Register() override
+        {
+            OnEffectHit.Register(&spell_azuremyst_isle_cast_fishing_net_SpellScript::HandleDummy, EFFECT_0, SPELL_EFFECT_DUMMY);
+        }
+    };
+
+    SpellScript* GetSpellScript() const override
+    {
+        return new spell_azuremyst_isle_cast_fishing_net_SpellScript();
+    }
+};
+
 void AddSC_azuremyst_isle()
 {
     new npc_draenei_survivor();
     new npc_engineer_spark_overgrind();
     new npc_injured_draenei();
     new npc_magwin();
+    new npc_geezle();
     new npc_death_ravager();
     new go_ravager_cage();
+    new spell_inoculate_nestlewood();
+    new spell_azuremyst_isle_cast_fishing_net();
 }

@@ -423,4 +423,5 @@ void AddSC_tanaris()
 {
     new npc_custodian_of_time();
     new npc_OOX17();
+    new npc_tooga();
 }

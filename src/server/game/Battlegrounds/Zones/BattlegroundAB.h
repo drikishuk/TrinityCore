@@ -326,6 +326,10 @@ class BattlegroundAB : public Battleground
         /* Nodes occupying */
         void EventPlayerClickedOnFlag(Player* source, GameObject* target_obj) override;
 
+        /* achievement req. */
+        bool IsAllNodesControlledByTeam(uint32 team) const override;
+        // bool CheckAchievementCriteriaMeet(uint32 /*criteriaId*/, Player const* /*player*/, Unit const* /*target*/ = nullptr, uint32 /*miscvalue1*/ = 0) override;
+
         uint32 GetPrematureWinner() override;
     private:
         void PostUpdateImpl(uint32 diff) override;

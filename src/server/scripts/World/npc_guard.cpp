@@ -36,7 +36,7 @@ EndContentData */
 #include "ScriptedCreature.h"
 #include "SpellInfo.h"
 
-enum GuardGeneric
+enum GuardMisc
 {
     GENERIC_CREATURE_COOLDOWN       = 5000,
 
@@ -45,17 +45,23 @@ enum GuardGeneric
     NPC_CENARION_HOLD_INFANTRY      = 15184,
     NPC_STORMWIND_CITY_GUARD        = 68,
     NPC_STORMWIND_CITY_PATROLLER    = 1976,
-    NPC_ORGRIMMAR_GRUNT             = 3296
+    NPC_ORGRIMMAR_GRUNT             = 3296,
+    NPC_ALDOR_VINDICATOR            = 18549,
+
+    SPELL_BANISHED_SHATTRATH_A      = 36642,
+    SPELL_BANISHED_SHATTRATH_S      = 36671,
+    SPELL_BANISH_TELEPORT           = 36643,
+    SPELL_EXILE                     = 39533,
 };
 
-class guard_generic : public CreatureScript
+class npc_guard_generic : public CreatureScript
 {
 public:
-    guard_generic() : CreatureScript("guard_generic") { }
+    npc_guard_generic() : CreatureScript("npc_guard_generic") { }
 
-    struct guard_genericAI : public GuardAI
+    struct npc_guard_generic_AI : public GuardAI
     {
-        guard_genericAI(Creature* creature) : GuardAI(creature)
+        npc_guard_generic_AI(Creature* creature) : GuardAI(creature)
         {
             Initialize();
         }
@@ -253,41 +259,33 @@ public:
 
     CreatureAI* GetAI(Creature* creature) const override
     {
-       return new guard_genericAI(creature);
+       return new npc_guard_generic_AI(creature);
     }
 };
 
-enum GuardShattrath
-{
-    SPELL_BANISHED_SHATTRATH_A = 36642,
-    SPELL_BANISHED_SHATTRATH_S = 36671,
-    SPELL_BANISH_TELEPORT      = 36643,
-    SPELL_EXILE                = 39533
-};
-
-class guard_shattrath_scryer : public CreatureScript
+class npc_guard_shattrath_faction : public CreatureScript
 {
 public:
-    guard_shattrath_scryer() : CreatureScript("guard_shattrath_scryer") { }
+    npc_guard_shattrath_faction() : CreatureScript("npc_guard_shattrath_faction") { }
 
-    struct guard_shattrath_scryerAI : public GuardAI
+    struct npc_guard_shattrath_faction_AI : public GuardAI
     {
-        guard_shattrath_scryerAI(Creature* creature) : GuardAI(creature)
+        npc_guard_shattrath_faction_AI(Creature* creature) : GuardAI(creature)
         {
-            Initialize();
-        }
-
-        void Initialize()
-        {
-            banishTimer = 5000;
-            exileTimer = 8500;
-            playerGUID.Clear();
-            canTeleport = false;
+            _scheduler.SetValidator([this]
+                {
+                    return !me->HasUnitState(UNIT_STATE_CASTING);
+                });
         }
 
         void Reset() override
         {
-            Initialize();
+            _scheduler.CancelAll();
+        }
+
+        void JustEngagedWith(Unit* /*who*/) override
+        {
+            ScheduleVanish();
         }
 
         void UpdateAI(uint32 diff) override
@@ -295,124 +293,45 @@ public:
             if (!UpdateVictim())
                 return;
 
-            if (canTeleport)
-            {
-                if (exileTimer <= diff)
-                {
-                    if (Unit* temp = ObjectAccessor::GetUnit(*me, playerGUID))
-                    {
-                        temp->CastSpell(temp, SPELL_EXILE, true);
-                        temp->CastSpell(temp, SPELL_BANISH_TELEPORT, true);
-                    }
-                    playerGUID.Clear();
-                    exileTimer = 8500;
-                    canTeleport = false;
-                } else exileTimer -= diff;
-            }
-            else if (banishTimer <= diff)
-            {
-                Unit* temp = me->GetVictim();
-                if (temp && temp->GetTypeId() == TYPEID_PLAYER)
-                {
-                    DoCast(temp, SPELL_BANISHED_SHATTRATH_A);
-                    banishTimer = 9000;
-                    playerGUID = temp->GetGUID();
-                    if (playerGUID)
-                        canTeleport = true;
-                }
-            } else banishTimer -= diff;
+            _scheduler.Update(diff, std::bind(&GuardAI::DoMeleeAttackIfReady, this));
+        }
 
-            DoMeleeAttackIfReady();
+        void ScheduleVanish()
+        {
+            _scheduler.Schedule(Seconds(5), [this](TaskContext banishContext)
+                {
+                    Unit* temp = me->GetVictim();
+                    if (temp && temp->GetTypeId() == TYPEID_PLAYER)
+                    {
+                        DoCast(temp, me->GetEntry() == NPC_ALDOR_VINDICATOR ? SPELL_BANISHED_SHATTRATH_S : SPELL_BANISHED_SHATTRATH_A);
+                        ObjectGuid playerGUID = temp->GetGUID();
+                        banishContext.Schedule(Seconds(9), [this, playerGUID](TaskContext /*exileContext*/)
+                            {
+                                if (Unit* temp = ObjectAccessor::GetUnit(*me, playerGUID))
+                                {
+                                    temp->CastSpell(temp, SPELL_EXILE, true);
+                                    temp->CastSpell(temp, SPELL_BANISH_TELEPORT, true);
+                                }
+                                ScheduleVanish();
+                            });
+                    }
+                    else
+                        banishContext.Repeat();
+                });
         }
 
     private:
-        uint32 exileTimer;
-        uint32 banishTimer;
-        ObjectGuid playerGUID;
-        bool canTeleport;
+        TaskScheduler _scheduler;
     };
 
     CreatureAI* GetAI(Creature* creature) const override
     {
-        return new guard_shattrath_scryerAI(creature);
+        return new npc_guard_shattrath_faction_AI(creature);
     }
 };
 
-class guard_shattrath_aldor : public CreatureScript
+void AddSC_npc_guard()
 {
-public:
-    guard_shattrath_aldor() : CreatureScript("guard_shattrath_aldor") { }
-
-    struct guard_shattrath_aldorAI : public GuardAI
-    {
-        guard_shattrath_aldorAI(Creature* creature) : GuardAI(creature)
-        {
-            Initialize();
-        }
-
-        void Initialize()
-        {
-            banishTimer = 5000;
-            exileTimer = 8500;
-            playerGUID.Clear();
-            canTeleport = false;
-        }
-
-        void Reset() override
-        {
-            Initialize();
-        }
-
-        void UpdateAI(uint32 diff) override
-        {
-            if (!UpdateVictim())
-                return;
-
-            if (canTeleport)
-            {
-                if (exileTimer <= diff)
-                {
-                    if (Unit* temp = ObjectAccessor::GetUnit(*me, playerGUID))
-                    {
-                        temp->CastSpell(temp, SPELL_EXILE, true);
-                        temp->CastSpell(temp, SPELL_BANISH_TELEPORT, true);
-                    }
-                    playerGUID.Clear();
-                    exileTimer = 8500;
-                    canTeleport = false;
-                } else exileTimer -= diff;
-            }
-            else if (banishTimer <= diff)
-            {
-                Unit* temp = me->GetVictim();
-                if (temp && temp->GetTypeId() == TYPEID_PLAYER)
-                {
-                    DoCast(temp, SPELL_BANISHED_SHATTRATH_S);
-                    banishTimer = 9000;
-                    playerGUID = temp->GetGUID();
-                    if (playerGUID)
-                        canTeleport = true;
-                }
-            } else banishTimer -= diff;
-
-            DoMeleeAttackIfReady();
-        }
-    private:
-        uint32 exileTimer;
-        uint32 banishTimer;
-        ObjectGuid playerGUID;
-        bool canTeleport;
-    };
-
-    CreatureAI* GetAI(Creature* creature) const override
-    {
-        return new guard_shattrath_aldorAI(creature);
-    }
-};
-
-void AddSC_guards()
-{
-    new guard_generic();
-    new guard_shattrath_aldor();
-    new guard_shattrath_scryer();
+    new npc_guard_generic();
+    new npc_guard_shattrath_faction();
 }

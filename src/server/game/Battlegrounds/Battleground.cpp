@@ -1925,7 +1925,7 @@ void Battleground::HandleAreaTrigger(Player* player, uint32 trigger)
 
 bool Battleground::CheckAchievementCriteriaMeet(uint32 criteriaId, Player const* /*source*/, Unit const* /*target*/, uint32 /*miscvalue1*/)
 {
-    TC_LOG_ERROR("bg.battleground", "Battleground::CheckAchievementCriteriaMeet: No implementation for criteria {}", criteriaId);
+    TC_LOG_ERROR("bg.battleground", "Battleground::CheckAchievementCriteriaMeet: No implementation for criteria %u", criteriaId);
     return false;
 }
 

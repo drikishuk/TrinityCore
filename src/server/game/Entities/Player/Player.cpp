@@ -2353,11 +2353,6 @@ void Player::GiveLevel(uint8 level)
                     SetByteFlag(PLAYER_FIELD_BYTES, PLAYER_FIELD_BYTES_OFFSET_RAF_GRANTABLE_LEVEL, 0x01);
             }
 
-    // Franca: Calculate base resilience value for level up [Resilience Feature - Origin]
-    PlayerLevelInfo oldInfo;
-    sObjectMgr->GetPlayerLevelInfo(getRace(), getClass(), oldLevel, &oldInfo);
-    ApplyRatingMod(CR_RESILIENCE_PLAYER_DAMAGE_TAKEN, level > oldLevel ? info.resilience - oldInfo.resilience : oldInfo.resilience - info.resilience, level > oldLevel);
-
     sScriptMgr->OnPlayerLevelChanged(this, oldLevel);
 }
 
@@ -2377,6 +2372,7 @@ void Player::InitTalentForLevel()
         {
             ResetTalents(true);
             SetFreeTalentPoints(0);
+            sScriptMgr->OnPlayerFreeTalentPointsChanged(this, 0);
         }
     }
     else
@@ -2395,11 +2391,18 @@ void Player::InitTalentForLevel()
             if (!GetSession()->HasPermission(rbac::RBAC_PERM_SKIP_CHECK_MORE_TALENTS_THAN_ALLOWED))
                 ResetTalents(true);
             else
+            {
                 SetFreeTalentPoints(0);
+                sScriptMgr->OnPlayerFreeTalentPointsChanged(this, 0);
+            }
         }
         // else update amount of free points
         else
-            SetFreeTalentPoints(talentPointsForLevel - GetUsedTalentCount());
+        {
+            uint32 pointsAmount = talentPointsForLevel - GetUsedTalentCount();
+            SetFreeTalentPoints(pointsAmount);
+            sScriptMgr->OnPlayerFreeTalentPointsChanged(this, pointsAmount);
+        }
     }
 
     if (!GetSession()->PlayerLoading())
@@ -2584,9 +2587,6 @@ void Player::InitStatsForLevel(bool reapplyMods)
     // update level to hunter/summon pet
     if (Pet* pet = GetPet())
         pet->SynchronizeLevelWithOwner();
-
-    // Franca: Load base resilience value for init level [Resilience Feature - Origin]
-    ApplyRatingMod(CR_RESILIENCE_PLAYER_DAMAGE_TAKEN, info.resilience, true);
 }
 
 void Player::SendKnownSpells(bool firstLogin /*= false*/)
@@ -3446,6 +3446,7 @@ bool Player::ResetTalents(bool no_cost)
     if (!GetUsedTalentCount())
     {
         SetFreeTalentPoints(talentPointsForLevel);
+        sScriptMgr->OnPlayerFreeTalentPointsChanged(this, talentPointsForLevel);
         return false;
     }
 
@@ -3519,6 +3520,7 @@ bool Player::ResetTalents(bool no_cost)
 
     SetPrimaryTalentTree(GetActiveSpec(), 0);
     SetFreeTalentPoints(talentPointsForLevel);
+    sScriptMgr->OnPlayerFreeTalentPointsChanged(this, talentPointsForLevel);
 
     // We consider resetting talents as changing a specialization as well as we now can pick an entirely new primary talent tree which equals changing specs
     RemoveAurasWithInterruptFlags(SpellAuraInterruptFlags2::ChangeSpec);
@@ -25497,7 +25499,9 @@ bool Player::LearnTalent(uint32 talentId, uint32 talentRank)
     }
 
     // update free talent points
-    SetFreeTalentPoints(CurTalentPoints - (talentRank - curtalent_maxrank + 1));
+    uint32 freePoints = CurTalentPoints - (talentRank - curtalent_maxrank + 1);
+    SetFreeTalentPoints(freePoints);
+    sScriptMgr->OnPlayerFreeTalentPointsChanged(this, freePoints);
     return true;
 }
 
@@ -26343,6 +26347,7 @@ void Player::ActivateSpec(uint8 spec)
                 RemoveAurasDueToSpell(old_gp->SpellID);
 
     SetActiveSpec(spec);
+
     uint32 spentTalents = 0;
 
     for (uint32 talentId = 0; talentId < sTalentStore.GetNumRows(); ++talentId)
@@ -26435,6 +26440,8 @@ void Player::ActivateSpec(uint8 spec)
 
     if (!sTalentTabStore.LookupEntry(GetPrimaryTalentTree(GetActiveSpec())))
         ResetTalents(true);
+
+    sScriptMgr->OnPlayerActivateSpec(this, spec);
 }
 
 void Player::LoadActions(PreparedQueryResult result)

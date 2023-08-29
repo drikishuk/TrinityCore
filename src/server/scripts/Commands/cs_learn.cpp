@@ -224,6 +224,7 @@ public:
         }
 
         player->SetFreeTalentPoints(0);
+        sScriptMgr->OnPlayerFreeTalentPointsChanged(player, 0);
 
         handler->SendSysMessage(LANG_COMMAND_LEARN_CLASS_TALENTS);
         return true;

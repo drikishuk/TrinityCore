@@ -639,6 +639,9 @@ class TC_GAME_API PlayerScript : public ScriptObject
         // Called when a player's talent points are reset (right before the reset is done)
         virtual void OnTalentsReset(Player* /*player*/, bool /*noCost*/) { }
 
+        // Called when a player changes to new spec from dual specialization
+        virtual void OnActivateSpec(Player* /*player*/, uint8 /*spec*/) { }
+
         // Called when a player's money is modified (before the modification is done)
         virtual void OnMoneyChanged(Player* /*player*/, int64& /*amount*/) { }
 
@@ -1011,6 +1014,7 @@ class TC_GAME_API ScriptMgr
         void OnPlayerLevelChanged(Player* player, uint8 oldLevel);
         void OnPlayerFreeTalentPointsChanged(Player* player, uint32 newPoints);
         void OnPlayerTalentsReset(Player* player, bool noCost);
+        void OnPlayerActivateSpec(Player* player, uint8 spec);
         void OnPlayerMoneyChanged(Player* player, int64& amount);
         void OnPlayerMoneyLimit(Player* player, int64 amount);
         void OnGivePlayerXP(Player* player, uint32& amount, Unit* victim);

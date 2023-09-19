@@ -158,6 +158,9 @@ class TC_GAME_API CreatureAI : public UnitAI
 
         void OnCharmed(bool isNew) override;
 
+        // Called when a spell starts
+        virtual void OnSpellStart(SpellInfo const* /*spell*/) { }
+
         virtual void OnSpellCastFinished(SpellInfo const* /*spell*/, SpellFinishReason /*reason*/) {  }
 
         // Called at reaching home after evade

@@ -1788,6 +1788,101 @@ void GameObject::UseDoorOrButton(uint32 time_to_restore, bool alternative /* = f
     m_cooldownTime = time_to_restore ? (GameTime::GetGameTimeMS() + time_to_restore) : 0;
 }
 
+void GameObject::ActivateObject(GameObjectActions action, WorldObject* spellCaster, uint32 spellId, int32 effectIndex)
+{
+    Unit* unitCaster = spellCaster ? spellCaster->ToUnit() : nullptr;
+
+    switch (action)
+    {
+    case GameObjectActions::None:
+        TC_LOG_FATAL("spell", "Spell {} has action type NONE in effect {}", spellId, effectIndex);
+        break;
+    case GameObjectActions::AnimateCustom0:
+    case GameObjectActions::AnimateCustom1:
+    case GameObjectActions::AnimateCustom2:
+    case GameObjectActions::AnimateCustom3:
+        SendCustomAnim(uint32(action) - uint32(GameObjectActions::AnimateCustom0));
+        break;
+    case GameObjectActions::Disturb: // What's the difference with Open?
+        if (unitCaster)
+            Use(unitCaster);
+        break;
+    case GameObjectActions::Unlock:
+        RemoveFlag(GAMEOBJECT_FLAGS, GO_FLAG_LOCKED);
+        break;
+    case GameObjectActions::Lock:
+        SetFlag(GAMEOBJECT_FLAGS, GO_FLAG_LOCKED);
+        break;
+    case GameObjectActions::Open:
+        if (unitCaster)
+            Use(unitCaster);
+        break;
+    case GameObjectActions::OpenAndUnlock:
+        if (unitCaster)
+        {
+            UseDoorOrButton(0, false, unitCaster);
+            RemoveFlag(GAMEOBJECT_FLAGS, GO_FLAG_LOCKED);
+        }
+        break;
+    case GameObjectActions::Close:
+        ResetDoorOrButton();
+        break;
+    case GameObjectActions::ToggleOpen:
+        // No use cases, implementation unknown
+        break;
+    case GameObjectActions::Destroy:
+        if (unitCaster)
+            UseDoorOrButton(0, true, unitCaster);
+        break;
+    case GameObjectActions::Rebuild:
+        ResetDoorOrButton();
+        break;
+    case GameObjectActions::Creation:
+        // No use cases, implementation unknown
+        break;
+    case GameObjectActions::Despawn:
+        DespawnOrUnsummon();
+        break;
+    case GameObjectActions::MakeInert:
+        SetFlag(GAMEOBJECT_FLAGS, GO_FLAG_NOT_SELECTABLE);
+        break;
+    case GameObjectActions::MakeActive:
+        RemoveFlag(GAMEOBJECT_FLAGS, GO_FLAG_NOT_SELECTABLE);
+        break;
+    case GameObjectActions::CloseAndLock:
+        ResetDoorOrButton();
+        SetFlag(GAMEOBJECT_FLAGS, GO_FLAG_LOCKED);
+        break;
+    case GameObjectActions::UseArtKit0:
+    case GameObjectActions::UseArtKit1:
+    case GameObjectActions::UseArtKit2:
+    case GameObjectActions::UseArtKit3:
+    case GameObjectActions::UseArtKit4:
+    {
+        GameObjectTemplateAddon const* templateAddon = GetTemplateAddon();
+
+        uint32 artKitIndex = uint32(action) - uint32(GameObjectActions::UseArtKit0);
+
+        uint32 artKitValue = 0;
+        if (templateAddon != nullptr)
+            artKitValue = templateAddon->artKits[artKitIndex];
+
+        if (artKitValue == 0)
+            TC_LOG_ERROR("sql.sql", "GameObject {} hit by spell {} needs `artkit{}` in `gameobject_template_addon`", GetEntry(), spellId, artKitIndex);
+        else
+            SetGoArtKit(artKitValue);
+
+        break;
+    }
+    case GameObjectActions::SetTapList:
+        // No use cases, implementation unknown
+        break;
+    default:
+        TC_LOG_ERROR("spell", "Spell {} has unhandled action {} in effect {}", spellId, int32(action), effectIndex);
+        break;
+    }
+}
+
 void GameObject::PlayAnimKit(int32 animKit)
 {
     WorldPacket data(SMSG_GAME_OBJECT_ACTIVATE_ANIM_KIT, 4 + 2);

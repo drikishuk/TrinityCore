@@ -27,6 +27,7 @@
 #include "PetDefines.h"
 #include "Player.h"
 #include "ScriptMgr.h"
+#include "Spell.h"
 #include "Vehicle.h"
 
 SmartAI::SmartAI(Creature* creature) : CreatureAI(creature), _isCharmed(false), _followCreditType(0), _followArrivedTimer(0), _followCredit(0), _followArrivedEntry(0), _followDist(0.f), _followAngle(0.f),
@@ -638,6 +639,11 @@ void SmartAI::JustSummoned(Creature* creature)
     GetScript()->ProcessEventsFor(SMART_EVENT_SUMMONED_UNIT, creature);
 }
 
+void SmartAI::SummonedCreatureDies(Creature* summon, Unit* /*killer*/)
+{
+    GetScript()->ProcessEventsFor(SMART_EVENT_SUMMONED_UNIT_DIES, summon);
+}
+
 void SmartAI::AttackStart(Unit* who)
 {
     // dont allow charmed npcs to act on their own
@@ -669,6 +675,27 @@ void SmartAI::SpellHit(WorldObject* caster, SpellInfo const* spellInfo)
 void SmartAI::SpellHitTarget(WorldObject* target, SpellInfo const* spellInfo)
 {
     GetScript()->ProcessEventsFor(SMART_EVENT_SPELLHIT_TARGET, target->ToUnit(), 0, 0, false, spellInfo);
+}
+
+void SmartAI::OnSpellCastFinished(SpellInfo const* spellInfo, SpellFinishReason reason)
+{
+    switch(reason)
+    {
+        case SPELL_FINISHED_SUCCESSFUL_CAST:
+            GetScript()->ProcessEventsFor(SMART_EVENT_ON_SPELL_CAST, nullptr, 0, 0, false, spellInfo);
+            break;
+    case SPELL_FINISHED_CANCELED:
+        GetScript()->ProcessEventsFor(SMART_EVENT_ON_SPELL_FAILED, nullptr, 0, 0, false, spellInfo);
+        break;
+    case SPELL_FINISHED_CHANNELING_COMPLETE:
+        GetScript()->ProcessEventsFor(SMART_EVENT_ON_SPELL_CHANNEL, nullptr, 0, 0, false, spellInfo);
+        break;
+    }
+}
+
+void SmartAI::OnSpellStart(SpellInfo const* spellInfo)
+{
+    GetScript()->ProcessEventsFor(SMART_EVENT_ON_SPELL_START, nullptr, 0, 0, false, spellInfo);
 }
 
 void SmartAI::DamageTaken(Unit* doneBy, uint32& damage)
@@ -710,6 +737,11 @@ void SmartAI::SummonedCreatureDespawn(Creature* unit)
 void SmartAI::CorpseRemoved(uint32& respawnDelay)
 {
     GetScript()->ProcessEventsFor(SMART_EVENT_CORPSE_REMOVED, nullptr, respawnDelay);
+}
+
+void SmartAI::LeavingWorld()
+{
+    GetScript()->ProcessEventsFor(SMART_EVENT_ON_DESPAWN);
 }
 
 void SmartAI::PassengerBoarded(Unit* who, int8 seatId, bool apply)

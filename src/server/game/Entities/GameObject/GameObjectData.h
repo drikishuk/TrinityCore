@@ -764,6 +764,7 @@ enum class GameObjectActions : uint32
     PlayAnimKit,                    // Play Anim Kit "%s"               // MiscValueB -> Anim Kit ID
     OpenAndPlayAnimKit,             // Open + Play Anim Kit "%s"        // MiscValueB -> Anim Kit ID
     CloseAndPlayAnimKit,            // Close + Play Anim Kit "%s"       // MiscValueB -> Anim Kit ID
+    Max
 };
 
 #endif // GameObjectData_h__

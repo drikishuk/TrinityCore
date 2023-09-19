@@ -112,6 +112,14 @@ void SmartScript::StoreTargetList(ObjectVector const& targets, uint32 id)
     _storedTargets.emplace(id, ObjectGuidVector(targets));
 }
 
+void SmartScript::AddToStoredTargetList(ObjectVector const& targets, uint32 id)
+{
+    auto [itr, inserted] = _storedTargets.try_emplace(id, targets);
+    if (!inserted)
+        for (WorldObject* obj : targets)
+            itr->second.AddGuid(obj->GetGUID());
+}
+
 ObjectVector const* SmartScript::GetStoredTargetVector(uint32 id, WorldObject const& ref) const
 {
     auto itr = _storedTargets.find(id);
@@ -824,6 +832,14 @@ void SmartScript::ProcessAction(SmartScriptHolder& e, Unit* unit, uint32 var0, u
         {
             if (!me)
                 break;
+
+            // Reset home position to respawn position if specified in the parameters
+            if (e.action.evade.toRespawnPosition == 0)
+            {
+                float homeX, homeY, homeZ, homeO;
+                me->GetRespawnPosition(homeX, homeY, homeZ, &homeO);
+                me->SetHomePosition(homeX, homeY, homeZ, homeO);
+            }
 
             me->AI()->EnterEvadeMode();
             TC_LOG_DEBUG("scripts.ai", "SmartScript::ProcessAction:: SMART_ACTION_EVADE: Creature %u EnterEvadeMode", me->GetGUID().GetCounter());
@@ -2436,8 +2452,79 @@ void SmartScript::ProcessAction(SmartScriptHolder& e, Unit* unit, uint32 var0, u
             for (WorldObject* target : targets)
                 if (IsUnit(target))
                     target->ToUnit()->SetHover(e.action.setHover.enable != 0);
-
             break;
+        case SMART_ACTION_SET_HEALTH_PCT:
+        {
+            for (WorldObject* target : targets)
+                if (Unit* targetUnit = target->ToUnit())
+                    targetUnit->SetHealth(targetUnit->CountPctFromMaxHealth(e.action.setHealthPct.percent));
+            break;
+        }
+        case SMART_ACTION_SET_IMMUNE_PC:
+        {
+            for (WorldObject* target : targets)
+            {
+                if (IsUnit(target))
+                {
+                    if (e.action.setImmunePC.immunePC)
+                        target->ToUnit()->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PC);
+                    else
+                        target->ToUnit()->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PC);
+                }
+            }
+            break;
+        }
+        case SMART_ACTION_SET_IMMUNE_NPC:
+        {
+            for (WorldObject* target : targets)
+            {
+                if (IsUnit(target))
+                {
+                    if (e.action.setImmuneNPC.immuneNPC)
+                        target->ToUnit()->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_NPC);
+                    else
+                        target->ToUnit()->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_NPC);
+                }
+            }
+            break;
+        }
+        case SMART_ACTION_SET_UNINTERACTIBLE:
+        {
+            for (WorldObject* target : targets)
+            {
+                if (IsUnit(target))
+                {
+                    if (e.action.setUninteractible.uninteractible)
+                        target->ToUnit()->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+                    else
+                        target->ToUnit()->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+                }
+            }
+            break;
+        }
+        case SMART_ACTION_ACTIVATE_GAMEOBJECT:
+        {
+            for (WorldObject* target : targets)
+            {
+                if (GameObject* targetGo = target->ToGameObject())
+                {
+                    targetGo->ActivateObject(GameObjectActions(e.action.activateGameObject.gameObjectAction), GetBaseObject());
+                }
+            }
+            break;
+        }
+        case SMART_ACTION_ADD_TO_STORED_TARGET_LIST:
+        {
+            if (!targets.empty())
+                AddToStoredTargetList(targets, e.action.addToStoredTargets.id);
+            else
+            {
+                WorldObject* baseObject = GetBaseObject();
+                TC_LOG_WARN("scripts.ai", "SmartScript::ProcessAction:: SMART_ACTION_ADD_TO_STORED_TARGET_LIST: var {}, baseObject {}, event {} - tried to add no targets to stored target list",
+                    e.action.addToStoredTargets.id, !baseObject ? "" : baseObject->GetName(), e.event_id);
+            }
+            break;
+        }
         default:
             TC_LOG_ERROR("sql.sql", "SmartScript::ProcessAction: Entry %d SourceType %u, Event %u, Unhandled Action type %u", e.entryOrGuid, e.GetScriptType(), e.event_id, e.GetActionType());
             break;
@@ -2866,7 +2953,7 @@ void SmartScript::GetTargets(ObjectVector& targets, SmartScriptHolder const& e, 
         {
             if (me && me->CanHaveThreatList())
                 for (auto* ref : me->GetThreatManager().GetUnsortedThreatList())
-                    if (!e.target.hostilRandom.maxDist || me->IsWithinCombatRange(ref->GetVictim(), float(e.target.hostilRandom.maxDist)))
+                    if (!e.target.threatList.maxDist || me->IsWithinCombatRange(ref->GetVictim(), float(e.target.threatList.maxDist)))
                         targets.push_back(ref->GetVictim());
             break;
         }
@@ -2960,7 +3047,7 @@ void SmartScript::ProcessEvent(SmartScriptHolder& e, Unit* unit, uint32 var0, ui
                 return;
             ProcessTimedAction(e, e.event.minMaxRepeat.repeatMin, e.event.minMaxRepeat.repeatMax);
             break;
-        case SMART_EVENT_HEALT_PCT:
+        case SMART_EVENT_HEALTH_PCT:
         {
             if (!me || !me->IsEngaged() || !me->GetMaxHealth())
                 return;
@@ -3108,7 +3195,7 @@ void SmartScript::ProcessEvent(SmartScriptHolder& e, Unit* unit, uint32 var0, ui
         case SMART_EVENT_TRANSPORT_ADDPLAYER:
         case SMART_EVENT_TRANSPORT_REMOVE_PLAYER:
         case SMART_EVENT_QUEST_ACCEPTED:
-        case SMART_EVENT_QUEST_OBJ_COPLETETION:
+        case SMART_EVENT_QUEST_OBJ_COMPLETION:
         case SMART_EVENT_QUEST_COMPLETION:
         case SMART_EVENT_QUEST_REWARDED:
         case SMART_EVENT_QUEST_FAIL:
@@ -3117,6 +3204,7 @@ void SmartScript::ProcessEvent(SmartScriptHolder& e, Unit* unit, uint32 var0, ui
         case SMART_EVENT_JUST_CREATED:
         case SMART_EVENT_FOLLOW_COMPLETED:
         case SMART_EVENT_ON_SPELLCLICK:
+        case SMART_EVENT_ON_DESPAWN:
             ProcessAction(e, unit, var0, var1, bvar, spell, gob);
             break;
         case SMART_EVENT_GOSSIP_HELLO:
@@ -3166,6 +3254,20 @@ void SmartScript::ProcessEvent(SmartScriptHolder& e, Unit* unit, uint32 var0, ui
                     RecalcTimer(e, e.event.spellHit.cooldownMin, e.event.spellHit.cooldownMax);
                     ProcessAction(e, unit, 0, 0, bvar, spell);
                 }
+            break;
+        }
+        case SMART_EVENT_ON_SPELL_CAST:
+        case SMART_EVENT_ON_SPELL_FAILED:
+        case SMART_EVENT_ON_SPELL_START:
+        {
+            if (!spell)
+                return;
+
+            if (spell->Id != e.event.spellCast.spell)
+                return;
+
+            RecalcTimer(e, e.event.spellCast.cooldownMin, e.event.spellCast.cooldownMax);
+            ProcessAction(e, nullptr, 0, 0, bvar, spell);
             break;
         }
         case SMART_EVENT_OOC_LOS:
@@ -3224,6 +3326,7 @@ void SmartScript::ProcessEvent(SmartScriptHolder& e, Unit* unit, uint32 var0, ui
             break;
         }
         case SMART_EVENT_SUMMONED_UNIT:
+        case SMART_EVENT_SUMMONED_UNIT_DIES:
         {
             if (!IsCreature(unit))
                 return;
@@ -3542,7 +3645,7 @@ void SmartScript::UpdateTimer(SmartScriptHolder& e, uint32 const diff)
             case SMART_EVENT_UPDATE:
             case SMART_EVENT_UPDATE_OOC:
             case SMART_EVENT_UPDATE_IC:
-            case SMART_EVENT_HEALT_PCT:
+            case SMART_EVENT_HEALTH_PCT:
             case SMART_EVENT_TARGET_HEALTH_PCT:
             case SMART_EVENT_MANA_PCT:
             case SMART_EVENT_TARGET_MANA_PCT:

@@ -97,6 +97,9 @@ class TC_GAME_API SmartAI : public CreatureAI
         // Called when the creature summon successfully other creature
         void JustSummoned(Creature* creature) override;
 
+        // Called when a summoned unit dies
+        void SummonedCreatureDies(Creature* summon, Unit* killer) override;
+
         // Tell creature to attack and follow the victim
         void AttackStart(Unit* who) override;
 
@@ -108,6 +111,12 @@ class TC_GAME_API SmartAI : public CreatureAI
 
         // Called when spell hits a target
         void SpellHitTarget(WorldObject* target, SpellInfo const* spellInfo) override;
+
+        // Called when a spell starts
+        void OnSpellStart(SpellInfo const* spellInfo) override;
+
+        // Called when a spell finishes (OnSpellCast, OnSpellFailed, OnChannelingComplete)
+        void OnSpellCastFinished(SpellInfo const* /*spellInfo*/, SpellFinishReason /*reason*/) override;
 
         // Called at any Damage from any attacker (before damage apply)
         void DamageTaken(Unit* doneBy, uint32& damage) override;
@@ -135,6 +144,9 @@ class TC_GAME_API SmartAI : public CreatureAI
 
         // called when the corpse of this creature gets removed
         void CorpseRemoved(uint32& respawnDelay) override;
+
+        // Called when the unit is about to be removed from the world (despawn, grid unload, corpse disappearing)
+        void LeavingWorld() override;
 
         // Called when a Player/Creature enters the creature (vehicle)
         void PassengerBoarded(Unit* who, int8 seatId, bool apply) override;

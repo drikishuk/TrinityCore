@@ -3437,7 +3437,13 @@ SpellCastResult Spell::prepare(SpellCastTargets const& targets, AuraEffect const
         if (!(_triggeredCastFlags & TRIGGERED_IGNORE_GCD))
             TriggerGlobalCooldown();
 
+        // Call SpellScript hook
         CallScriptOnSpellStartHandlers();
+
+        // Call CreatureAI hook OnSpellStart
+        if (Creature* caster = m_caster->ToCreature())
+            if (caster->IsAIEnabled())
+                caster->AI()->OnSpellStart(GetSpellInfo());
 
         // commented out !m_spellInfo->StartRecoveryTime, it forces instant spells with global cooldown to be processed in spell::update
         // as a result a spell that passed CheckCast and should be processed instantly may suffer from this delayed process

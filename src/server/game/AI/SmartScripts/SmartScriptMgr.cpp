@@ -37,7 +37,7 @@
 { \
     if (value > 1) \
     { \
-        TC_LOG_ERROR("sql.sql", "SmartAIMgr: Entry {} SourceType {} Event {} Action {} uses param {} of type Boolean with value {}, valid values are 0 or 1, skipped.", \
+        TC_LOG_ERROR("sql.sql", "SmartAIMgr: Entry %d SourceType %u Event %u Action %u uses param %s of type Boolean with value %u, valid values are 0 or 1, skipped.", \
             e.entryOrGuid, e.GetScriptType(), e.event_id, e.GetActionType(), STRINGIZE(value), value); \
         return false; \
     } \
@@ -777,7 +777,7 @@ bool SmartAIMgr::CheckUnusedEventParams(SmartScriptHolder const& e)
             case SMART_EVENT_ON_SPELL_START: return sizeof(SmartEvent::spellCast);
             case SMART_EVENT_ON_DESPAWN: return NO_PARAMS;
             default:
-                TC_LOG_WARN("sql.sql", "SmartAIMgr: Entry {} SourceType {} Event {} Action {} is using an event with no unused params specified in SmartAIMgr::CheckUnusedEventParams(), please report this.",
+                TC_LOG_WARN("sql.sql", "SmartAIMgr: Entry %d SourceType %u Event %u Action %u is using an event with no unused params specified in SmartAIMgr::CheckUnusedEventParams(), please report this.",
                     e.entryOrGuid, e.GetScriptType(), e.event_id, e.GetActionType());
                 return sizeof(SmartEvent::raw);
             }
@@ -791,7 +791,7 @@ bool SmartAIMgr::CheckUnusedEventParams(SmartScriptHolder const& e)
             uint32 value = ((uint32*)&e.event.raw)[index];
             if (value != 0)
             {
-                TC_LOG_WARN("sql.sql", "SmartAIMgr: Entry {} SourceType {} Event {} Action {} has unused event_param{} with value {}, it should be 0.",
+                TC_LOG_WARN("sql.sql", "SmartAIMgr: Entry %d SourceType %u Event %u Action %u has unused event_param%u with value %u, it should be 0.",
                     e.entryOrGuid, e.GetScriptType(), e.event_id, e.GetActionType(), index + 1, value);
             }
         }
@@ -937,7 +937,7 @@ bool SmartAIMgr::CheckUnusedActionParams(SmartScriptHolder const& e)
             case SMART_ACTION_ACTIVATE_GAMEOBJECT: return sizeof(SmartAction::activateGameObject);
             case SMART_ACTION_ADD_TO_STORED_TARGET_LIST: return sizeof(SmartAction::addToStoredTargets);
             default:
-                TC_LOG_WARN("sql.sql", "SmartAIMgr: Entry {} SourceType {} Event {} Action {} is using an action with no unused params specified in SmartAIMgr::CheckUnusedActionParams(), please report this.",
+                TC_LOG_WARN("sql.sql", "SmartAIMgr: Entry %d SourceType %u Event %u Action %u is using an action with no unused params specified in SmartAIMgr::CheckUnusedActionParams(), please report this.",
                     e.entryOrGuid, e.GetScriptType(), e.event_id, e.GetActionType());
                 return sizeof(SmartAction::raw);
             }
@@ -951,7 +951,7 @@ bool SmartAIMgr::CheckUnusedActionParams(SmartScriptHolder const& e)
             uint32 value = ((uint32*)&e.action.raw)[index];
             if (value != 0)
             {
-                TC_LOG_WARN("sql.sql", "SmartAIMgr: Entry {} SourceType {} Event {} Action {} has unused action_param{} with value {}, it should be 0.",
+                TC_LOG_WARN("sql.sql", "SmartAIMgr: Entry %d SourceType %u Event %u Action %u has unused action_param%u with value %u, it should be 0.",
                     e.entryOrGuid, e.GetScriptType(), e.event_id, e.GetActionType(), index + 1, value);
             }
         }
@@ -998,7 +998,7 @@ bool SmartAIMgr::CheckUnusedTargetParams(SmartScriptHolder const& e)
             case SMART_TARGET_VEHICLE_PASSENGER: return sizeof(SmartTarget::vehicle);
             case SMART_TARGET_CLOSEST_UNSPAWNED_GAMEOBJECT: return sizeof(SmartTarget::closest);
             default:
-                TC_LOG_WARN("sql.sql", "SmartAIMgr: Entry {} SourceType {} Event {} Action {} is using a target with no unused params specified in SmartAIMgr::CheckUnusedTargetParams(), please report this.",
+                TC_LOG_WARN("sql.sql", "SmartAIMgr: Entry %d SourceType %u Event %u Action %u is using a target with no unused params specified in SmartAIMgr::CheckUnusedTargetParams(), please report this.",
                     e.entryOrGuid, e.GetScriptType(), e.event_id, e.GetActionType());
                 return sizeof(SmartTarget::raw);
             }
@@ -1012,7 +1012,7 @@ bool SmartAIMgr::CheckUnusedTargetParams(SmartScriptHolder const& e)
             uint32 value = ((uint32*)&e.target.raw)[index];
             if (value != 0)
             {
-                TC_LOG_WARN("sql.sql", "SmartAIMgr: Entry {} SourceType {} Event {} Action {} has unused target_param{} with value {}, it should be 0.",
+                TC_LOG_WARN("sql.sql", "SmartAIMgr: Entry %d SourceType %u Event %u Action %u has unused target_param%u with value %u, it should be 0.",
                     e.entryOrGuid, e.GetScriptType(), e.event_id, e.GetActionType(), index + 1, value);
             }
         }
@@ -1981,7 +1981,7 @@ bool SmartAIMgr::IsEventValid(SmartScriptHolder& e)
         {
             if (e.action.setHealthPct.percent > 100 || !e.action.setHealthPct.percent)
             {
-                TC_LOG_ERROR("sql.sql", "SmartAIMgr: Entry {} SourceType {} Event {} Action {} is trying to set invalid HP percent {}, skipped.",
+                TC_LOG_ERROR("sql.sql", "SmartAIMgr: Entry %d SourceType %u Event %u Action %u is trying to set invalid HP percent %u, skipped.",
                     e.entryOrGuid, e.GetScriptType(), e.event_id, e.GetActionType(), e.action.setHealthPct.percent);
                 return false;
             }
@@ -2101,7 +2101,7 @@ bool SmartAIMgr::IsEventValid(SmartScriptHolder& e)
 
             if (e.action.activateGameObject.gameObjectAction >= uint32(GameObjectActions::Max))
             {
-                TC_LOG_ERROR("sql.sql", "SmartAIMgr: Entry {} SourceType {} Event {} Action {} has gameObjectAction parameter out of range (max allowed {}, current value {}), skipped.",
+                TC_LOG_ERROR("sql.sql", "SmartAIMgr: Entry %d SourceType %u Event %u Action %u has gameObjectAction parameter out of range (max allowed %u, current value %u), skipped.",
                     e.entryOrGuid, e.GetScriptType(), e.event_id, e.GetActionType(), uint32(GameObjectActions::Max) - 1, e.action.activateGameObject.gameObjectAction);
                 return false;
             }

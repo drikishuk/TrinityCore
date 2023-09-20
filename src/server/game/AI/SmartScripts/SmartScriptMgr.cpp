@@ -952,7 +952,7 @@ bool SmartAIMgr::CheckUnusedActionParams(SmartScriptHolder const& e)
             if (value != 0)
             {
                 TC_LOG_WARN("sql.sql", "SmartAIMgr: Entry %d SourceType %u Event %u Action %u has unused action_param%u with value %u, it should be 0.",
-                    e.entryOrGuid, e.GetScriptType(), e.event_id, e.GetActionType(), index + 1, value);
+                    e.entryOrGuid, e.GetScriptType(), e.event_id, e.GetActionType(), static_cast<uint32>(index + 1), value);
             }
         }
 
@@ -1013,7 +1013,7 @@ bool SmartAIMgr::CheckUnusedTargetParams(SmartScriptHolder const& e)
             if (value != 0)
             {
                 TC_LOG_WARN("sql.sql", "SmartAIMgr: Entry %d SourceType %u Event %u Action %u has unused target_param%u with value %u, it should be 0.",
-                    e.entryOrGuid, e.GetScriptType(), e.event_id, e.GetActionType(), index + 1, value);
+                    e.entryOrGuid, e.GetScriptType(), e.event_id, e.GetActionType(), static_cast<uint32>(index + 1), value);
             }
         }
 

@@ -1795,7 +1795,7 @@ void GameObject::ActivateObject(GameObjectActions action, WorldObject* spellCast
     switch (action)
     {
     case GameObjectActions::None:
-        TC_LOG_FATAL("spell", "Spell {} has action type NONE in effect {}", spellId, effectIndex);
+        TC_LOG_FATAL("spell", "Spell %u has action type NONE in effect %d", spellId, effectIndex);
         break;
     case GameObjectActions::AnimateCustom0:
     case GameObjectActions::AnimateCustom1:
@@ -1868,7 +1868,7 @@ void GameObject::ActivateObject(GameObjectActions action, WorldObject* spellCast
             artKitValue = templateAddon->artKits[artKitIndex];
 
         if (artKitValue == 0)
-            TC_LOG_ERROR("sql.sql", "GameObject {} hit by spell {} needs `artkit{}` in `gameobject_template_addon`", GetEntry(), spellId, artKitIndex);
+            TC_LOG_ERROR("sql.sql", "GameObject %u hit by spell %u needs `artkit%u` in `gameobject_template_addon`", GetEntry(), spellId, artKitIndex);
         else
             SetGoArtKit(artKitValue);
 
@@ -1878,7 +1878,7 @@ void GameObject::ActivateObject(GameObjectActions action, WorldObject* spellCast
         // No use cases, implementation unknown
         break;
     default:
-        TC_LOG_ERROR("spell", "Spell {} has unhandled action {} in effect {}", spellId, int32(action), effectIndex);
+        TC_LOG_ERROR("spell", "Spell %u has unhandled action %d in effect %u", spellId, int32(action), effectIndex);
         break;
     }
 }

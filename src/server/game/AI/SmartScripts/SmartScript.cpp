@@ -2521,7 +2521,7 @@ void SmartScript::ProcessAction(SmartScriptHolder& e, Unit* unit, uint32 var0, u
             {
                 WorldObject* baseObject = GetBaseObject();
                 TC_LOG_WARN("scripts.ai", "SmartScript::ProcessAction:: SMART_ACTION_ADD_TO_STORED_TARGET_LIST: var %u, baseObject %s, event %u - tried to add no targets to stored target list",
-                    e.action.addToStoredTargets.id, !baseObject ? "" : baseObject->GetName(), e.event_id);
+                    e.action.addToStoredTargets.id, !baseObject ? "" : baseObject->GetName().c_str(), e.event_id);
             }
             break;
         }
